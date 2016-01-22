@@ -13,15 +13,26 @@ def mock_func(num=1):
     for x in range(num):
         yield mock.Mock(name='MockFunction%d' % next(COUNTER))
 
+def futurize(m):
+    @gen.coroutine
+    def future():
+        return m.future.return_value
+    m.future.side_effect = future
+    return m
 
-def funcs_targets(num=1):
+
+def targets_and_values(num=1, futures=()):
     f = list(mock_func(num))
-    return f, [targets.CallTarget(func) for func in f]
+    for i in futures:
+        futurize(f[i])
+    return f
 
 
-def funcs_targets_dicts(keys):
-    f, t = funcs_targets(len(keys))
-    return dict(zip(keys, f)), dict(zip(keys, t))
+def targets_and_values_dict(keys, futures=()):
+    f = dict(zip(keys, targets_and_values(len(keys))))
+    for k in futures:
+        futurize(f[k])
+    return f
 
 
 def func_target(args, kwargs):
@@ -68,6 +79,58 @@ class NoPositionals(object):
 class NoKwargs(object):
     KEYS = ()
 
+
+class WithFutures(object):
+    @classmethod
+    def targets_and_values(cls, t):
+        return targets_and_values(t, cls.futures_indices(t))
+
+    @classmethod
+    def targets_and_values_dict(cls, keys):
+        return targets_and_values_dict(keys,
+                [keys[i] for i in cls.futures_indices(len(keys))])
+
+    @classmethod
+    def expect_args(cls, args):
+        idx = cls.futures_indices(len(args))
+        expect = list(args)
+        for i in idx:
+            expect[i] = expect[i].future.return_value
+        return expect
+    
+    @classmethod
+    def expect_kwargs(cls, kw, keys):
+        idx = cls.futures_indices(len(keys))
+        expect = dict(kw)
+        for i in idx:
+            expect[keys[i]] = expect[keys[i]].future.return_value
+        return expect
+
+
+class NoFutures(WithFutures):
+    @classmethod
+    def futures_indices(cls, t):
+        return []
+
+
+class AllFutures(WithFutures):
+    @classmethod
+    def futures_indices(cls, t):
+        return list(range(t))
+
+
+class EvenFutures(WithFutures):
+    @classmethod
+    def futures_indices(cls, t):
+        return list(range(t, 0, 2))
+
+
+class OddFutures(WithFutures):
+    @classmethod
+    def futures_indices(cls, t):
+        return list(range(t, 1, 2))
+
+
 class OnePositional(object):
     POSITIONALS = 1
 
@@ -86,12 +149,12 @@ class TwoKwargs(object):
 class ThreeKwargs(object):
     KEYS = ('d', 'e', 'f')
 
-class TestFuncTarget(NoPositionals, NoKwargs, tt.AsyncTestCase):
+class TestFuncTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCase):
     @classmethod
     def args(cls):
-        f, t = funcs_targets(cls.POSITIONALS)
-        kw_f, kw_t = funcs_targets_dicts(cls.KEYS)
-        return f, t, kw_f, kw_t
+        arg = cls.targets_and_values(cls.POSITIONALS)
+        kw = cls.targets_and_values_dict(cls.KEYS)
+        return arg, kw
 
     @classmethod
     def prepare_target(cls, args, kwargs):
@@ -101,19 +164,20 @@ class TestFuncTarget(NoPositionals, NoKwargs, tt.AsyncTestCase):
 
     @tt.gen_test
     def test_func_target(self):
-        pos_f, pos_t, kw_f, kw_t = self.args()
-        func, target = self.prepare_target(pos_t, kw_t)
+        pos, kw = self.args()
+        func, target = self.prepare_target(pos, kw)
 
         # We expect the target's func to be called with the results
         # of each arg's future.
-        x_args = [f.return_value for f in pos_f]
-        x_kwargs = dict((k, f.return_value) for k, f in kw_f.items())
+        x_args = self.expect_args(pos)
+        x_kwargs = self.expect_kwargs(kw, self.KEYS)
 
         for _ in range(2):
             r = yield target.future()
             tools.assert_equal(func.return_value, r)
 
         func.assert_called_once_with(*x_args, **x_kwargs)
+
 
 class TestFuncTwoPos(TwoPositionals, TestFuncTarget):
     pass
