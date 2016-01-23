@@ -157,10 +157,25 @@ class FuncTarget(Target):
         a = self.argets
         kw = self.kwargets
 
-        inputs = itertools.chain(a, kw.values())
-        inputs = yield [t.future() for t in inputs]
+        # The total set of parameter values, flattened.
+        inputs = list(itertools.chain(a, kw.values()))
 
-        kw = dict(zip(kw.keys(), inputs[len(a):]))
-        a = inputs[:len(a)]
+        # The subset of those parameter values that are targets
+        # (they have a 'future')
+        futures = dict((i, arg.future())
+                for i, arg in enumerate(inputs)
+                if hasattr(arg, 'future'))
+
+        if len(futures):
+            # Wait on the futures.
+            futures = yield futures
+
+            # Merge them back into the inputs.
+            for i, result in futures.items():
+                inputs[i] = result
+            kw = dict(zip(kw.keys(), inputs[len(a):]))
+            a = inputs[:len(a)]
+
+        # And return the assembled parameters.
         raise gen.Return((a, kw))
 

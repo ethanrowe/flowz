@@ -9,20 +9,23 @@ from flo import targets
 
 COUNTER = itertools.count()
 
-def mock_func(num=1):
+def mock_func(num=1, template='MockFunction%d'):
     for x in range(num):
-        yield mock.Mock(name='MockFunction%d' % next(COUNTER))
+        yield mock.Mock(name=template % next(COUNTER), spec={})
 
-def futurize(m):
+def futurize(m, returnval=None):
     @gen.coroutine
     def future():
-        return m.future.return_value
+        if returnval is None:
+            return m.future.return_value
+        return returnval
+    m.future = mock.Mock(name='future%d' % next(COUNTER))
     m.future.side_effect = future
     return m
 
 
 def targets_and_values(num=1, futures=()):
-    f = list(mock_func(num))
+    f = list(mock_func(num, 'Param%d'))
     for i in futures:
         futurize(f[i])
     return f
@@ -122,13 +125,13 @@ class AllFutures(WithFutures):
 class EvenFutures(WithFutures):
     @classmethod
     def futures_indices(cls, t):
-        return list(range(t, 0, 2))
+        return list(range(0, t, 2))
 
 
 class OddFutures(WithFutures):
     @classmethod
     def futures_indices(cls, t):
-        return list(range(t, 1, 2))
+        return list(range(1, t, 2))
 
 
 class OnePositional(object):
@@ -168,7 +171,7 @@ class TestFuncTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCase):
         func, target = self.prepare_target(pos, kw)
 
         # We expect the target's func to be called with the results
-        # of each arg's future.
+        # of each pertinent arg's future.
         x_args = self.expect_args(pos)
         x_kwargs = self.expect_kwargs(kw, self.KEYS)
 
@@ -182,28 +185,93 @@ class TestFuncTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCase):
 class TestFuncTwoPos(TwoPositionals, TestFuncTarget):
     pass
 
+class TestFuncTwoPosOdds(OddFutures, TestFuncTwoPos):
+    pass
+
+class TestFuncTwoPosEvens(EvenFutures, TestFuncTwoPos):
+    pass
+
+class TestFunTwoPosNone(NoFutures, TestFuncTarget):
+    pass
+
 class TestFuncThreePos(ThreePositionals, TestFuncTarget):
+    pass
+
+class TestFuncThreePosOdds(OddFutures, TestFuncThreePos):
+    pass
+
+class TestFuncThreePosEvens(EvenFutures, TestFuncThreePos):
+    pass
+
+class TestFuncThreePosNone(NoFutures, TestFuncThreePos):
     pass
 
 class TestFuncOneKwarg(OneKwarg, TestFuncTarget):
     pass
 
+class TestFuncOneKwargNone(NoFutures, TestFuncOneKwarg):
+    pass
+
 class TestFuncTwoKwargs(TwoKwargs, TestFuncTarget):
+    pass
+
+class TestFuncTwoKwargsOdds(OddFutures, TestFuncTwoKwargs):
+    pass
+
+class TestFuncTwoKwargsEvents(EvenFutures, TestFuncTwoKwargs):
+    pass
+
+class TestFuncTwoKwargs(NoFutures, TestFuncTwoKwargs):
     pass
 
 class TestFuncThreeKwargs(ThreeKwargs, TestFuncTarget):
     pass
 
+class TestFuncThreeKwargsOdds(OddFutures, TestFuncThreeKwargs):
+    pass
+
+class TestFuncThreeKwargsEvens(EvenFutures, TestFuncThreeKwargs):
+    pass
+
 class TestFuncOnePosOneKwarg(OnePositional, OneKwarg, TestFuncTarget):
+    pass
+
+class TestFuncOnePosOneKwargNone(NoFutures, TestFuncOnePosOneKwarg):
     pass
 
 class TestFuncOnePosThreeKwargs(OnePositional, ThreeKwargs, TestFuncTarget):
     pass
 
+class TestFuncOnePosThreeKwargsOdds(OddFutures, TestFuncOnePosThreeKwargs):
+    pass
+
+class TestFuncOnePosThreeKwargsEvens(EvenFutures, TestFuncOnePosThreeKwargs):
+    pass
+
+class TestFuncOnePosThreeKawrgsNone(NoFutures, TestFuncOnePosThreeKwargs):
+    pass
+
 class TestFuncThreePosOneKwarg(ThreePositionals, OneKwarg, TestFuncTarget):
     pass
 
-class TestFuncThreePosThreeKwarg(ThreePositionals, ThreeKwargs, TestFuncTarget):
+class TestFuncThreePosOneKwargOdds(OddFutures, TestFuncThreePosOneKwarg):
     pass
 
+class TestFuncThreePosOneKwargEvens(EvenFutures, TestFuncThreePosOneKwarg):
+    pass
+
+class TestFuncThreePosOneKwargNone(NoFutures, TestFuncThreePosOneKwarg):
+    pass
+
+class TestFuncThreePosThreeKwargs(ThreePositionals, ThreeKwargs, TestFuncTarget):
+    pass
+
+class TestFuncThreePosThreeKwargsOdds(OddFutures, TestFuncThreePosThreeKwargs):
+    pass
+
+class TestFuncThreePosThreeKwargsEvens(EvenFutures, TestFuncThreePosThreeKwargs):
+    pass
+
+class TestFuncThreePosThreeKwargsNone(NoFutures, TestFuncThreePosThreeKwargs):
+    pass
 
