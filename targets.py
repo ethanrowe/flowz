@@ -97,9 +97,11 @@ class FuncTarget(Target):
     """
     A `Target` that asynchronously retrieves a function's parameters.
 
-    Given a function and some number of positional and keyword `Target` params,
-    will asynchronously gather the values of all those `Targets` and invoke the
-    function with the gathered values as its arguments.
+    Given a function and some number of positional and keyword params,
+    will identify and asynchronously gather the values of any params that
+    appear to be `Targets`, replacing those params with their target results
+    prior to passing along to the wrapped callable.  Params that do not appear
+    to be `Targets` will be preserved when passed to the wrapped callable.
 
     This is best explained via a simple thought experiment.
 
@@ -130,6 +132,18 @@ class FuncTarget(Target):
                 lambda: s3_async.fetch(object_key)))
 
         difference = FuncTarget(delta, a=s3_transformer(object_key_a),
+            b=s3_transformer(object_key_b),
+            c=s3_transformer(object_key_c))
+
+    Now suppose the `delta` function takes an additional keyword parameter that
+    tunes its behaviors; the value is a simple float, and you don't need to do
+    any concurrent stuff to know the desired value.  You can mix and match; if the
+    parameter doesn't look like a `Target`, it will be passed through unchanged.
+
+    So our `difference` call might look like this instead:
+
+        difference = FuncTarget(delta, some_tuning_param=0.473,
+            a=s3_transformer(object_key_a),
             b=s3_transformer(object_key_b),
             c=s3_transformer(object_key_c))
 
