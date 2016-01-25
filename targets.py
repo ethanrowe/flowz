@@ -195,6 +195,23 @@ class FuncTarget(Target):
 
 
 class FutureTarget(FuncTarget):
+    """
+    A target that asynchronously retrieves parameters and a final result.
+
+    This extends `FuncTarget`, and is consistent in the handling of parameters
+    (both positional and keyword).  However, the callable (be it a function or
+    a class or whatever else) is expected to return a target (something with
+    a `future` method).
+
+    The `FutureTarget` will thus asynchronously gather parameters, like
+    `FuncTarget`, and will pass them to the callable.  It will then
+    asynchronously invoke the target returned by the callable.
+
+    The result of the `FutureTarget` is the result of that future.
+
+    Think of it like this: it's `FuncTarget`, but for `Target` objects instead
+    of functions.
+    """
     @gen.coroutine
     def start(self):
         r = yield super(FutureTarget, self).start()
