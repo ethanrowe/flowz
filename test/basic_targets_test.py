@@ -152,7 +152,7 @@ class TwoKwargs(object):
 class ThreeKwargs(object):
     KEYS = ('d', 'e', 'f')
 
-class TestFuncTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCase):
+class TestFutureParamTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCase):
     @classmethod
     def args(cls):
         arg = cls.targets_and_values(cls.POSITIONALS)
@@ -160,7 +160,7 @@ class TestFuncTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCase):
         return arg, kw
 
     @classmethod
-    def prepare_target(cls, args, kwargs):
+    def prepare_func_target(cls, args, kwargs):
         f, = mock_func(1)
         t = targets.FuncTarget(f, *args, **kwargs)
         return f, t
@@ -168,7 +168,7 @@ class TestFuncTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCase):
     @tt.gen_test
     def test_func_target(self):
         pos, kw = self.args()
-        func, target = self.prepare_target(pos, kw)
+        func, target = self.prepare_func_target(pos, kw)
 
         # We expect the target's func to be called with the results
         # of each pertinent arg's future.
@@ -182,96 +182,96 @@ class TestFuncTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCase):
         func.assert_called_once_with(*x_args, **x_kwargs)
 
 
-class TestFuncTwoPos(TwoPositionals, TestFuncTarget):
+class TestFutureParamTwoPos(TwoPositionals, TestFutureParamTarget):
     pass
 
-class TestFuncTwoPosOdds(OddFutures, TestFuncTwoPos):
+class TestFutureParamTwoPosOdds(OddFutures, TestFutureParamTwoPos):
     pass
 
-class TestFuncTwoPosEvens(EvenFutures, TestFuncTwoPos):
+class TestFutureParamTwoPosEvens(EvenFutures, TestFutureParamTwoPos):
     pass
 
-class TestFunTwoPosNone(NoFutures, TestFuncTarget):
+class TestFunTwoPosNone(NoFutures, TestFutureParamTarget):
     pass
 
-class TestFuncThreePos(ThreePositionals, TestFuncTarget):
+class TestFutureParamThreePos(ThreePositionals, TestFutureParamTarget):
     pass
 
-class TestFuncThreePosOdds(OddFutures, TestFuncThreePos):
+class TestFutureParamThreePosOdds(OddFutures, TestFutureParamThreePos):
     pass
 
-class TestFuncThreePosEvens(EvenFutures, TestFuncThreePos):
+class TestFutureParamThreePosEvens(EvenFutures, TestFutureParamThreePos):
     pass
 
-class TestFuncThreePosNone(NoFutures, TestFuncThreePos):
+class TestFutureParamThreePosNone(NoFutures, TestFutureParamThreePos):
     pass
 
-class TestFuncOneKwarg(OneKwarg, TestFuncTarget):
+class TestFutureParamOneKwarg(OneKwarg, TestFutureParamTarget):
     pass
 
-class TestFuncOneKwargNone(NoFutures, TestFuncOneKwarg):
+class TestFutureParamOneKwargNone(NoFutures, TestFutureParamOneKwarg):
     pass
 
-class TestFuncTwoKwargs(TwoKwargs, TestFuncTarget):
+class TestFutureParamTwoKwargs(TwoKwargs, TestFutureParamTarget):
     pass
 
-class TestFuncTwoKwargsOdds(OddFutures, TestFuncTwoKwargs):
+class TestFutureParamTwoKwargsOdds(OddFutures, TestFutureParamTwoKwargs):
     pass
 
-class TestFuncTwoKwargsEvents(EvenFutures, TestFuncTwoKwargs):
+class TestFutureParamTwoKwargsEvents(EvenFutures, TestFutureParamTwoKwargs):
     pass
 
-class TestFuncTwoKwargs(NoFutures, TestFuncTwoKwargs):
+class TestFutureParamTwoKwargs(NoFutures, TestFutureParamTwoKwargs):
     pass
 
-class TestFuncThreeKwargs(ThreeKwargs, TestFuncTarget):
+class TestFutureParamThreeKwargs(ThreeKwargs, TestFutureParamTarget):
     pass
 
-class TestFuncThreeKwargsOdds(OddFutures, TestFuncThreeKwargs):
+class TestFutureParamThreeKwargsOdds(OddFutures, TestFutureParamThreeKwargs):
     pass
 
-class TestFuncThreeKwargsEvens(EvenFutures, TestFuncThreeKwargs):
+class TestFutureParamThreeKwargsEvens(EvenFutures, TestFutureParamThreeKwargs):
     pass
 
-class TestFuncOnePosOneKwarg(OnePositional, OneKwarg, TestFuncTarget):
+class TestFutureParamOnePosOneKwarg(OnePositional, OneKwarg, TestFutureParamTarget):
     pass
 
-class TestFuncOnePosOneKwargNone(NoFutures, TestFuncOnePosOneKwarg):
+class TestFutureParamOnePosOneKwargNone(NoFutures, TestFutureParamOnePosOneKwarg):
     pass
 
-class TestFuncOnePosThreeKwargs(OnePositional, ThreeKwargs, TestFuncTarget):
+class TestFutureParamOnePosThreeKwargs(OnePositional, ThreeKwargs, TestFutureParamTarget):
     pass
 
-class TestFuncOnePosThreeKwargsOdds(OddFutures, TestFuncOnePosThreeKwargs):
+class TestFutureParamOnePosThreeKwargsOdds(OddFutures, TestFutureParamOnePosThreeKwargs):
     pass
 
-class TestFuncOnePosThreeKwargsEvens(EvenFutures, TestFuncOnePosThreeKwargs):
+class TestFutureParamOnePosThreeKwargsEvens(EvenFutures, TestFutureParamOnePosThreeKwargs):
     pass
 
-class TestFuncOnePosThreeKawrgsNone(NoFutures, TestFuncOnePosThreeKwargs):
+class TestFutureParamOnePosThreeKawrgsNone(NoFutures, TestFutureParamOnePosThreeKwargs):
     pass
 
-class TestFuncThreePosOneKwarg(ThreePositionals, OneKwarg, TestFuncTarget):
+class TestFutureParamThreePosOneKwarg(ThreePositionals, OneKwarg, TestFutureParamTarget):
     pass
 
-class TestFuncThreePosOneKwargOdds(OddFutures, TestFuncThreePosOneKwarg):
+class TestFutureParamThreePosOneKwargOdds(OddFutures, TestFutureParamThreePosOneKwarg):
     pass
 
-class TestFuncThreePosOneKwargEvens(EvenFutures, TestFuncThreePosOneKwarg):
+class TestFutureParamThreePosOneKwargEvens(EvenFutures, TestFutureParamThreePosOneKwarg):
     pass
 
-class TestFuncThreePosOneKwargNone(NoFutures, TestFuncThreePosOneKwarg):
+class TestFutureParamThreePosOneKwargNone(NoFutures, TestFutureParamThreePosOneKwarg):
     pass
 
-class TestFuncThreePosThreeKwargs(ThreePositionals, ThreeKwargs, TestFuncTarget):
+class TestFutureParamThreePosThreeKwargs(ThreePositionals, ThreeKwargs, TestFutureParamTarget):
     pass
 
-class TestFuncThreePosThreeKwargsOdds(OddFutures, TestFuncThreePosThreeKwargs):
+class TestFutureParamThreePosThreeKwargsOdds(OddFutures, TestFutureParamThreePosThreeKwargs):
     pass
 
-class TestFuncThreePosThreeKwargsEvens(EvenFutures, TestFuncThreePosThreeKwargs):
+class TestFutureParamThreePosThreeKwargsEvens(EvenFutures, TestFutureParamThreePosThreeKwargs):
     pass
 
-class TestFuncThreePosThreeKwargsNone(NoFutures, TestFuncThreePosThreeKwargs):
+class TestFutureParamThreePosThreeKwargsNone(NoFutures, TestFutureParamThreePosThreeKwargs):
     pass
 
