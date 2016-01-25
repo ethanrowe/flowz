@@ -165,6 +165,12 @@ class TestFutureParamTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCas
         t = targets.FuncTarget(f, *args, **kwargs)
         return f, t
 
+
+    @classmethod
+    def expected_params(cls, pos, kw):
+        return cls.expect_args(pos), cls.expect_kwargs(kw, cls.KEYS)
+
+
     @tt.gen_test
     def test_func_target(self):
         pos, kw = self.args()
@@ -172,14 +178,31 @@ class TestFutureParamTarget(AllFutures, NoPositionals, NoKwargs, tt.AsyncTestCas
 
         # We expect the target's func to be called with the results
         # of each pertinent arg's future.
-        x_args = self.expect_args(pos)
-        x_kwargs = self.expect_kwargs(kw, self.KEYS)
+        x_args, x_kwargs = self.expected_params(pos, kw)
 
         for _ in range(2):
             r = yield target.future()
             tools.assert_equal(func.return_value, r)
 
         func.assert_called_once_with(*x_args, **x_kwargs)
+
+
+    @tt.gen_test
+    def test_future_target(self):
+        pos, kw = self.args()
+
+        f, = mock_func(1)
+        futurize(f.return_value)
+        t = targets.FutureTarget(f, *pos, **kw)
+
+        x_args, x_kwargs = self.expected_params(pos, kw)
+
+        for _ in range(2):
+            r = yield t.future()
+            tools.assert_equal(f.return_value.future.return_value, r)
+
+        f.assert_called_once_with(*x_args, **x_kwargs)
+        f.return_value.future.assert_called_once_with()
 
 
 class TestFutureParamTwoPos(TwoPositionals, TestFutureParamTarget):

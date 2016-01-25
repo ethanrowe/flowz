@@ -193,3 +193,11 @@ class FuncTarget(Target):
         # And return the assembled parameters.
         raise gen.Return((a, kw))
 
+
+class FutureTarget(FuncTarget):
+    @gen.coroutine
+    def start(self):
+        r = yield super(FutureTarget, self).start()
+        r = yield r.future()
+        raise gen.Return(r)
+
