@@ -45,16 +45,26 @@ class ChannelTest(object):
 
 
     @gen.coroutine
-    def verify_channel_values(self, chan, values):
+    def verify_channel_values(self, chan, values, nesting=False):
+        kids = []
+
         # Don't care whether its literally False or None
         tools.assert_equal(False, chan.done() or False)
-        for val in values:
+        for i, val in enumerate(values):
             received = yield chan.next()
             tools.assert_equal(val, received)
             # Don't care whether its literally False or None
             tools.assert_equal(False, chan.done() or False)
 
+            if nesting:
+                kids.append(self.verify_channel_values(
+                    channels.TeeChannel(
+                        chan), values[i + 1:], nesting=nesting))
+
         yield raises_channel_done(chan)
+
+        if kids:
+            yield kids
 
 
     @tt.gen_test
@@ -96,6 +106,17 @@ class ChannelTest(object):
         yield self.verify_channel_values(tee, values)
 
 
+    @tt.gen_test
+    def test_nested_tee_iteration(self):
+        values = [mock.Mock(name='Iteration%d' % i) for i in range(5)]
+        chan = self.get_channel_with_values(values)
+
+        # This guy ensures that if you tee a partially-consumed channel,
+        # the resulting tee only sees the items remaining.  It further
+        # ensures it recursively down the graph of futures.
+        yield self.verify_channel_values(chan, values, nesting=True)
+
+
 class IterChannelTest(ChannelTest, tt.AsyncTestCase):
     def get_channel_with_values(self, values):
         return channels.IterChannel(iter(values))
@@ -133,6 +154,8 @@ class FutureChannelTest(ChannelTest, tt.AsyncTestCase):
 
 
 class ReadyFutureChannelTest(ChannelTest, tt.AsyncTestCase):
+    _first_nest = True
+
     def ordered_values(self, values):
         """
         Imposes a consistent order on values differing from the original
@@ -151,10 +174,19 @@ class ReadyFutureChannelTest(ChannelTest, tt.AsyncTestCase):
 
 
     @gen.coroutine
-    def verify_channel_values(self, chan, values):
-        values = self.ordered_values(values)
-        r = yield super(ReadyFutureChannelTest, self).verify_channel_values(
-                chan, values)
-        raise gen.Return(r)
+    def verify_channel_values(self, chan, values, nesting=False):
+        # This sucks but should work.
+        first = False
+        if self._first_nest:
+            first = True
+            self._first_nest = False
+            values = self.ordered_values(values)
+        try:
+            r = yield super(ReadyFutureChannelTest, self).verify_channel_values(
+                chan, values, nesting=nesting)
+            raise gen.Return(r)
+        finally:
+            if first:
+                self._first_nest = True
 
 
