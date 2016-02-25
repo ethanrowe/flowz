@@ -24,7 +24,7 @@ class Channel(object):
 
    
     def done(self):
-        return False
+        return self.__done__
 
 
     @gen.coroutine

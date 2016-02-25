@@ -63,6 +63,8 @@ class ChannelTest(object):
 
         yield raises_channel_done(chan)
 
+        tools.assert_equal(True, chan.done())
+
         if kids:
             yield kids
 
