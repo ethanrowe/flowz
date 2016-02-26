@@ -232,6 +232,38 @@ class FunctionChannel(ReadChannel):
         raise gen.Return(value)
 
 
+class MapChannel(FunctionChannel):
+    """
+    A channel that allows a per-message transform to 0 or more output messages.
+
+    Basically like `FunctionChannel`, in that a given transform function is
+    applied to each message from a given source channel.  However, the transform
+    result is expected to be iterable, and the items of each iterable are
+    output as distinct messages to the downstream consumer.
+
+    This allows for filtering (filter out items by returning the empty tuple),
+    for exploding complex structures out into simpler sequences of values, etc.
+    """
+
+    @gen.coroutine
+    def __reader__(self, thischan):
+        head = self.__future__
+        try:
+            while not self.__done__:
+                value = yield self.__next_item__()
+                for subitem in value:
+                    if self.__done__:
+                        break
+                    next_f = cc.Future()
+                    head.set_result((next_f, subitem))
+                    head = next_f
+
+        except ChannelDone:
+            head.set_exception(ChannelDone("Channel is done"))
+
+
+
+
 class FutureChannel(ReadChannel):
     """
     Wraps a source channel that produces Futures, and waits on each message.

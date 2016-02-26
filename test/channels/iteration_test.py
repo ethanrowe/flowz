@@ -234,3 +234,34 @@ class ZipChannelWithTenTest(ZipChannelWithTwoTest):
     CHANNELS = 10
 
 
+class MapChannelTest(ChannelTest, tt.AsyncTestCase):
+    INTERVAL = 2
+
+    def intervalic_values(self, values):
+        return [
+            values[i:i + self.INTERVAL] if i % self.INTERVAL == 0 else ()
+            for i, v in enumerate(values)]
+
+
+    def build_mapper(self, values):
+        """
+        Return subslices of `values` according to `self.INTERVAL`.
+
+        Any value that is positionally at an index of `values` that
+        is divisible by `self.INTERVAL` will produce an iterator of
+        `self.INTERVAL` values.
+
+        Any other value will produce an empty iterator.
+        """
+        valmap = dict(zip(values, self.intervalic_values(values)))
+        return lambda v: iter(valmap[v])
+
+
+    def get_channel_with_values(self, values):
+        c = channels.IterChannel(values)
+        return channels.MapChannel(c, self.build_mapper(values))
+
+
+class MapChannelByThreeTest(MapChannelTest):
+    INTERVAL = 3
+
