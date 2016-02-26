@@ -192,3 +192,45 @@ class ReadyFutureChannelTest(ChannelTest, tt.AsyncTestCase):
                 self._first_nest = True
 
 
+class ZipChannelWithTwoTest(ChannelTest, tt.AsyncTestCase):
+    CHANNELS = 2
+
+    def expanded_values(self, values):
+        return [tuple(id(val) // (i + 1) for i in range(self.CHANNELS))
+                for val in values]
+
+    def get_channel_with_values(self, values):
+        values = self.expanded_values(values)
+        chans = [channels.IterChannel([v[i] for v in values])
+                for i in range(self.CHANNELS)]
+
+        return channels.ZipChannel(chans)
+
+    @gen.coroutine
+    def verify_channel_values(self, chan, values, nesting=False):
+        if values and not isinstance(values[0], tuple):
+            values = self.expanded_values(values)
+        r = yield super(ZipChannelWithTwoTest, self).verify_channel_values(
+                chan, values, nesting=nesting)
+        raise gen.Return(r)
+
+
+    @tt.gen_test
+    def shortest_channel_determines_length_test(self):
+        lengths = [5 + i for i in range(self.CHANNELS)]
+        all_values = [[mock.Mock(name='Length%dValue%d' % (l, i))
+                        for i in range(l)]
+                        for l in lengths]
+
+        chans = [channels.IterChannel(v) for v in all_values]
+
+        expect = list(zip(*all_values))
+        chan = channels.ZipChannel(chans)
+
+        yield self.verify_channel_values(chan, expect)
+
+
+class ZipChannelWithTenTest(ZipChannelWithTwoTest):
+    CHANNELS = 10
+
+

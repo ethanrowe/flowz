@@ -453,6 +453,33 @@ class IterChannel(ProducerChannel):
         return starter
 
 
+class ZipChannel(ReadChannel):
+    """
+    Zips multiple channels together for iterating as a group.
+
+    Given N source channels, the ZipChannel acts like a channel-oriented
+    `zip()`, such that:
+
+        yield zc.next() --> (chan0.next(), chan1.next(), ... chanN.next())
+
+    The `ZipChannel` produces `ChannelDone` and is considered exhausted as soon
+    as any of its source channels reach that state.
+    """
+    def __init__(self, channels):
+        super(ReadChannel, self).__init__(self.__reader__)
+        self.__channels__ = channels
+
+
+    @gen.coroutine
+    def __next_item__(self):
+        r = []
+        # Less efficient than yielding the list of futures,
+        # but quieter when exceptions are thrown.
+        for i, c in enumerate(self.__channels__):
+            v = yield c.next()
+            r.append(v)
+        raise gen.Return(tuple(r))
+
 
 if __name__ == '__main__':
     from tornado import ioloop as iol
