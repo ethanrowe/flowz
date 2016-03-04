@@ -204,7 +204,7 @@ class ReadChannel(Channel):
         raise gen.Return(value)
 
 
-class FunctionChannel(ReadChannel):
+class MapChannel(ReadChannel):
     """
     A channel that applies a per-message transformation to its source channel.
 
@@ -221,7 +221,7 @@ class FunctionChannel(ReadChannel):
         expected to be asynchronous.  It's called per source message and the
         result is passed on as the published message.
         """
-        super(FunctionChannel, self).__init__(channel)
+        super(MapChannel, self).__init__(channel)
         self.__transform__ = transform
 
 
@@ -232,11 +232,11 @@ class FunctionChannel(ReadChannel):
         raise gen.Return(value)
 
 
-class FlatMapChannel(FunctionChannel):
+class FlatMapChannel(MapChannel):
     """
     A channel that allows a per-message transform to 0 or more output messages.
 
-    Basically like `FunctionChannel`, in that a given transform function is
+    Basically like `MapChannel`, in that a given transform function is
     applied to each message from a given source channel.  However, the transform
     result is expected to be iterable, and the items of each iterable are
     output as distinct messages to the downstream consumer.
@@ -541,7 +541,7 @@ if __name__ == '__main__':
                 val = yield chan.next()
                 print("Reader", name, "received:", val)
                 kid = reader(
-                        FunctionChannel(TeeChannel(chan), lambda v: v * -1),
+                        MapChannel(TeeChannel(chan), lambda v: v * -1),
                         name + (val,))
                 children.append(kid)
                 i += 1
