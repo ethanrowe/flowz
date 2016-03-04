@@ -234,7 +234,7 @@ class ZipChannelWithTenTest(ZipChannelWithTwoTest):
     CHANNELS = 10
 
 
-class MapChannelTest(ChannelTest, tt.AsyncTestCase):
+class FlatMapChannelTest(ChannelTest, tt.AsyncTestCase):
     INTERVAL = 2
 
     def intervalic_values(self, values):
@@ -259,9 +259,9 @@ class MapChannelTest(ChannelTest, tt.AsyncTestCase):
 
     def get_channel_with_values(self, values):
         c = channels.IterChannel(values)
-        return channels.MapChannel(c, self.build_mapper(values))
+        return channels.FlatMapChannel(c, self.build_mapper(values))
 
 
-class MapChannelByThreeTest(MapChannelTest):
+class FlatMapChannelByThreeTest(FlatMapChannelTest):
     INTERVAL = 3
 

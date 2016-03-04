@@ -232,7 +232,7 @@ class FunctionChannel(ReadChannel):
         raise gen.Return(value)
 
 
-class MapChannel(FunctionChannel):
+class FlatMapChannel(FunctionChannel):
     """
     A channel that allows a per-message transform to 0 or more output messages.
 
