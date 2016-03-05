@@ -525,11 +525,42 @@ class ZipChannel(ReadChannel):
             r.append(v)
         raise gen.Return(tuple(r))
 
-
 if __name__ == '__main__':
-    from tornado import ioloop as iol
-    loop = iol.IOLoop.current()
+    import flo.app
+    import sys
 
+    class Flo(flo.app.Flo):
+        @gen.coroutine
+        def wrap_target(self, target):
+            """
+            Forces app to stop on unhandled channel exception.
+            """
+            i = 0
+            print("Channel %s starting." % str(target))
+            try:
+                while True:
+                    yield target.next()
+                    i += 1
+            except ChannelDone:
+                print("Channel %s complete." % str(target))
+                pass
+            except Exception:
+                self.exc_info = sys.exc_info()
+                print("Channel %s exception!" % str((target, self.exc_info)))
+                self.loop.stop()
+            raise gen.Return(i)
+
+
+        @gen.coroutine
+        def main(self):
+            wrap = self.wrap_target
+            while self.targets and getattr(self, 'exc_info') is None:
+                yield gen.moment
+                targets = self.targets
+                self.targets = {}
+                r = yield dict((k, wrap(target))
+                        for k, target in targets.items())
+            self.loop.stop()
 
     @gen.coroutine
     def starter(chan):
@@ -542,53 +573,44 @@ if __name__ == '__main__':
         print("Done writing to channel.")
         chan.close()
 
+    
+    def reader(app, chan, name):
+        def _reader(val):
+            print("Reader", name, "received:", val)
+            # Uncomment for proof that the app stops when a channel fails.
+            #if len(name) > 3:
+            #    raise Exception("Boom! from %s" % str(name))
+            c = MapChannel(TeeChannel(chan), lambda v: v * -1)
+            c = FlatMapChannel(c, reader(app, c, name + (val,)))
+            app.add_targets([c])
+            return ()
+        return _reader
+
+
+    import random
     @gen.coroutine
-    def reader(chan, name, sleep=0.0):
-        print("Reader", name, "sleeping for", sleep)
-        yield gen.sleep(sleep)
-        print("Reader", name, "looping")
-        children = []
-        try:
-            i = 0
-            while i < 10:
-                val = yield chan.next()
-                print("Reader", name, "received:", val)
-                kid = reader(
-                        MapChannel(TeeChannel(chan), lambda v: v * -1),
-                        name + (val,))
-                children.append(kid)
-                i += 1
-        except ChannelDone:
-            print("Reader", name, "sees channel is done.")
-        print("Reader", name, "waiting on children")
-        yield children
-        print("Reader", name, "done.")
+    def sleeper(i):
+        yield gen.sleep(random.random() * 3)
+        raise gen.Return(i)
 
+    #channel = IterChannel(sleeper(x) for x in range(5))
+    channel = ProducerChannel(starter)
+    channel = ReadyFutureChannel(channel)
 
-    @gen.coroutine
-    def main():
-        def items(n):
-            for i in range(n):
-                f = cc.Future()
-                f.set_result(i)
-                yield f
+    chans = (
+            ReadChannel(TeeChannel(channel))
+            for n in ('a', 'b', 'c')
+            )
 
-        import random
-        @gen.coroutine
-        def sleeper(i):
-            yield gen.sleep(random.random() * 3)
-            raise gen.Return(i)
+    app = Flo([])
 
-        channel = ReadyFutureChannel(IterChannel(sleeper(x) for x in range(5)))
-        a = reader(ReadChannel(TeeChannel(channel)), ("a",), sleep=0.1)
-        b = reader(ReadChannel(TeeChannel(channel)), ("b",), sleep=0.2)
-        c = reader(ReadChannel(TeeChannel(channel)), ("c",), sleep=0.3)
-        yield [a, b, c]
+    chans = [
+        FlatMapChannel(c, reader(app, c, (n,)))
+        for n, c in zip(('a', 'b', 'c'), chans)]
 
-
-    print("Starting loop.")
-    loop.run_sync(main)
-    print("Loop done.")
-
+    app.add_targets(chans)
+    print("Starting app.")
+    app.run()
+    print("App done.")
 
 
