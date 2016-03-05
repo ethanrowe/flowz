@@ -189,6 +189,8 @@ class ReadChannel(Channel):
                 head = next_f
         except ChannelDone:
             head.set_exception(ChannelDone("Channel is done"))
+        except Exception as e:
+            head.set_exception(e)
 
 
     @gen.coroutine
@@ -260,6 +262,8 @@ class FlatMapChannel(MapChannel):
 
         except ChannelDone:
             head.set_exception(ChannelDone("Channel is done"))
+        except Exception as e:
+            head.set_exception(e)
 
 
 
@@ -429,7 +433,7 @@ class ProducerChannel(Channel):
 
 
     @gen.coroutine
-    def put(self, item):
+    def put(self, item, exception=False):
         """
         Asynchronously place `item` onto the channel.
 
@@ -442,9 +446,12 @@ class ProducerChannel(Channel):
         last_f = self.__head__
         if last_f.done():
             raise ChannelDone()
-        next_f = cc.Future()
-        self.__head__ = next_f
-        last_f.set_result((next_f, item))
+        if exception:
+            last_f.set_exception(item)
+        else:
+            next_f = cc.Future()
+            self.__head__ = next_f
+            last_f.set_result((next_f, item))
         raise gen.Return(True)
 
 
@@ -479,9 +486,15 @@ class IterChannel(ProducerChannel):
         @gen.coroutine
         def starter(chan):
             yield chan.__ready__
-            for value in iterable:
-                yield chan.put(value)
-            chan.close()
+            try:
+                for value in iterable:
+                    yield chan.put(value)
+            except ChannelDone:
+                pass
+            except Exception as e:
+                yield chan.put(e, exception=True)
+            else:
+                chan.close()
         return starter
 
 

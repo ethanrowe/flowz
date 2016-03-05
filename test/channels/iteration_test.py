@@ -31,6 +31,9 @@ def waiter(val, depends):
     raise gen.Return(val)
 
 
+class TestException(Exception):
+    pass
+
 class ChannelTest(object):
     """
     Baseline channel test that exercises behaviors common to
@@ -119,15 +122,61 @@ class ChannelTest(object):
         yield self.verify_channel_values(chan, values, nesting=True)
 
 
-class IterChannelTest(ChannelTest, tt.AsyncTestCase):
+class ChannelExceptionTest(object):
+    @tt.gen_test
+    def test_iteration_and_exception(self):
+        vals = [mock.Mock() for _ in range(3)]
+        chan = self.get_channel_values_before_error(vals)
+
+        yield self.verify_channel_values_and_error(chan, vals)
+
+
+    @gen.coroutine
+    def verify_channel_values_and_error(self, chan, values):
+        tools.assert_equal(False, chan.done() or False)
+        for i, val in enumerate(values):
+            received = yield chan.next()
+            tools.assert_equal(val, received)
+            tools.assert_equal(False, chan.done() or False)
+
+        # Do this twice because the state should be basically stuck.
+        try:
+            yield chan.next()
+        except TestException:
+            pass
+
+        tools.assert_equal(False, chan.done() or False)
+
+        try:
+            yield chan.next()
+        except TestException:
+            pass
+
+        tools.assert_equal(False, chan.done() or False)
+
+
+class IterChannelTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
     def get_channel_with_values(self, values):
         return channels.IterChannel(iter(values))
 
 
-class ReadChannelTest(ChannelTest, tt.AsyncTestCase):
+    def get_channel_values_before_error(self, values):
+        def valgen():
+            for v in values:
+                yield v
+            raise TestException("Boom!")
+        return channels.IterChannel(valgen())
+
+
+class ReadChannelTest(IterChannelTest):
     def get_channel_with_values(self, values):
-        c = channels.IterChannel(iter(values))
+        c = super(ReadChannelTest, self).get_channel_with_values(values)
         return channels.ReadChannel(c)
+
+    def get_channel_values_before_error(self, values):
+        c = super(ReadChannelTest, self).get_channel_values_before_error(values)
+        return channels.ReadChannel(c)
+
 
 class ProducerChannelTest(ChannelTest, tt.AsyncTestCase):
     def producer(self, values):
@@ -234,7 +283,47 @@ class ZipChannelWithTenTest(ZipChannelWithTwoTest):
     CHANNELS = 10
 
 
-class FlatMapChannelTest(ChannelTest, tt.AsyncTestCase):
+class MapChannelTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
+    def expected_values(self, values):
+        if not hasattr(self, '_expected_vals'):
+            self._expected_vals = dict(
+                    (val, val.transform.return_value)
+                    for val in values)
+            for val in list(self._expected_vals.values()):
+                self._expected_vals[val] = val
+        return [self._expected_vals[val] for val in values]
+
+
+    def get_channel_with_values(self, values):
+        c = channels.IterChannel(values)
+        return channels.MapChannel(c, lambda val: val.transform())
+
+
+    def get_channel_values_before_error(self, values):
+        valmap = dict((value, value.transform.return_value)
+                for value in values)
+        c = channels.IterChannel(values + [None])
+        def mapper(value):
+            try:
+                return valmap[value]
+            except KeyError:
+                raise TestException("Boom!")
+
+        return channels.MapChannel(c, mapper)
+
+
+    def verify_channel_values_and_error(self, chan, values):
+        return super(MapChannelTest, self).verify_channel_values_and_error(
+                chan, self.expected_values(values))
+
+    def verify_channel_values(self, chan, values, nesting=False):
+        # This depends on the fact that expected_values is stateful,
+        # which is admittedly a cruddy design.
+        return super(MapChannelTest, self).verify_channel_values(
+                chan, self.expected_values(values), nesting=nesting)
+
+    
+class FlatMapChannelTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
     INTERVAL = 2
 
     def intervalic_values(self, values):
@@ -256,10 +345,25 @@ class FlatMapChannelTest(ChannelTest, tt.AsyncTestCase):
         valmap = dict(zip(values, self.intervalic_values(values)))
         return lambda v: iter(valmap[v])
 
+    
+    def build_exception_mapper(self, values):
+        mapper = self.build_mapper(values)
+        def _mapper(v):
+            try:
+                return mapper(v)
+            except KeyError:
+                raise TestException("Blowing up!")
+        return _mapper
+
 
     def get_channel_with_values(self, values):
         c = channels.IterChannel(values)
         return channels.FlatMapChannel(c, self.build_mapper(values))
+
+
+    def get_channel_values_before_error(self, values):
+        c = channels.IterChannel(values + [object()])
+        return channels.FlatMapChannel(c, self.build_exception_mapper(values))
 
 
 class FlatMapChannelByThreeTest(FlatMapChannelTest):
