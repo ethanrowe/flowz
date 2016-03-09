@@ -525,42 +525,40 @@ class ZipChannel(ReadChannel):
             r.append(v)
         raise gen.Return(tuple(r))
 
-if __name__ == '__main__':
-    import flo.app
-    import sys
+import flo.app
+import sys
 
-    class Flo(flo.app.Flo):
-        @gen.coroutine
-        def wrap_target(self, target):
-            """
-            Forces app to stop on unhandled channel exception.
-            """
-            i = 0
-            print("Channel %s starting." % str(target))
-            try:
-                while True:
-                    yield target.next()
-                    i += 1
-            except ChannelDone:
-                print("Channel %s complete." % str(target))
-                pass
-            except Exception:
-                self.exc_info = sys.exc_info()
-                print("Channel %s exception!" % str((target, self.exc_info)))
-                self.loop.stop()
-            raise gen.Return(i)
-
-
-        @gen.coroutine
-        def main(self):
-            wrap = self.wrap_target
-            while self.targets and getattr(self, 'exc_info') is None:
-                yield gen.moment
-                targets = self.targets
-                self.targets = {}
-                r = yield dict((k, wrap(target))
-                        for k, target in targets.items())
+class Flo(flo.app.Flo):
+    @gen.coroutine
+    def wrap_target(self, target):
+        """
+        Forces app to stop on unhandled channel exception.
+        """
+        i = 0
+        try:
+            while True:
+                yield target.next()
+                i += 1
+        except ChannelDone:
+            pass
+        except Exception:
+            self.exc_info = sys.exc_info()
             self.loop.stop()
+        raise gen.Return(i)
+
+
+    @gen.coroutine
+    def main(self):
+        wrap = self.wrap_target
+        while self.targets and getattr(self, 'exc_info') is None:
+            yield gen.moment
+            targets = self.targets
+            self.targets = {}
+            r = yield dict((k, wrap(target))
+                    for k, target in targets.items())
+        self.loop.stop()
+
+if __name__ == '__main__':
 
     @gen.coroutine
     def starter(chan):
