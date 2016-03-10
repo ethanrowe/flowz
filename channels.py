@@ -6,6 +6,8 @@ from tornado import gen
 from tornado import ioloop as iol
 from tornado import locks
 
+from . import util
+
 class ChannelDone(Exception):
     """
     Exception throw when trying to access a completed channel.
@@ -526,51 +528,6 @@ class ZipChannel(ReadChannel):
         raise gen.Return(tuple(r))
 
 
-class Minimum(object):
-    """
-    Less than all other objects other than itself.
-    """
-    def __gt__(self, other):
-        return False
-    
-    def __lt__(self, other):
-        return self is not other
-
-    def __eq__(self, other):
-        return self is other
-    
-    def __ne__(self, other):
-        return self is not other
-    
-    def __ge__(self, other):
-        return self is other
-    
-    def __le__(self, other):
-        return True
-
-class Maximum(object):
-    """
-    Greater than all other objects other than itself.
-    """
-    def __gt__(self, other):
-        return self is not other
-
-    def __lt__(self, other):
-        return False
-    
-    def __eq__(self, other):
-        return self is other
-    
-    def __ne__(self, other):
-        return self is not other
-    
-    def __ge__(self, other):
-        return True
-    
-    def __le__(self, other):
-        return self is other
-
-
 class CoGroupChannel(ReadChannel):
     """
     Walks all input channels in ascending key order
@@ -634,8 +591,8 @@ class CoGroupChannel(ReadChannel):
     ```
     """
 
-    _last_key = Minimum()
-    _max_key = Maximum()
+    _last_key = util.MINIMUM
+    _max_key = util.MAXIMUM
     
     def __init__(self, channels):
         super(ReadChannel, self).__init__(self.__reader__)
