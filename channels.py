@@ -525,6 +525,172 @@ class ZipChannel(ReadChannel):
             r.append(v)
         raise gen.Return(tuple(r))
 
+
+class Minimum(object):
+    """
+    Less than all other objects other than itself.
+    """
+    def __gt__(self, other):
+        return False
+    
+    def __lt__(self, other):
+        return self is not other
+
+    def __eq__(self, other):
+        return self is other
+    
+    def __ne__(self, other):
+        return self is not other
+    
+    def __ge__(self, other):
+        return self is other
+    
+    def __le__(self, other):
+        return True
+
+class Maximum(object):
+    """
+    Greater than all other objects other than itself.
+    """
+    def __gt__(self, other):
+        return self is not other
+
+    def __lt__(self, other):
+        return False
+    
+    def __eq__(self, other):
+        return self is other
+    
+    def __ne__(self, other):
+        return self is not other
+    
+    def __ge__(self, other):
+        return True
+    
+    def __le__(self, other):
+        return self is other
+
+
+class CoGroupChannel(ReadChannel):
+    """
+    Walks all input channels in ascending key order
+
+    Given some number of channels, each of which emits items as (k, v) pairs,
+    where all k are sorted in ascending order, walks the channels in order,
+    such that each distinct k is seen.  For each successive k, the (k, v) pair
+    from each channel will be the greatest k seen that is less than or equal to
+    the current k.
+
+
+    Suppose that we have two channels:
+    
+    ```
+        S             D
+     ------         ----
+    (K0, S0)      (K0, D0)
+    (K1, S1)      (K1, D1)
+    (K3, S3)      (K2, D2)
+    (K4, S4)
+    
+    ```
+    
+    In the cogrouped world, we would get this as:
+    
+    ```
+    ((K0, S0), (K0, D0))
+    ((K1, S1), (K1, D1))
+    ((K1, S1), (K2, D2))
+    ((K3, S3), (K2, D2))
+    ((K4, S4), (K2, D2))
+    ```
+    
+    In other words, we walk the ordered set of all keys _SKeys_ + _DKeys_,
+    and for each such key, we should the most recent `(key, value)` pair per input
+    channel less than or equal to the current key.
+
+    This can be done with any number of input channels, as long as they follow the
+    key/sorting assumptions.
+
+    If one of the input channels has a first key that is higher than the others,
+    it will appear as `None` until its key is active.  Suppose, we add a third channel,
+    to see.
+
+    ```
+        X
+     ------
+    (K2, X2)
+    (K3, X3)
+    (K4, X4)
+    ```
+
+    If we cogroup S, D, and X, we get:
+
+    ```
+    ((K0, S0), (K0, D0), None)
+    ((K1, S1), (K1, D1), None)
+    ((K1, S1), (K2, D2), (K2, X2))
+    ((K3, S3), (K2, D2), (K3, X3))
+    ((K4, S4), (K2, D2), (K4, X4))
+    ```
+    """
+
+    _last_key = Minimum()
+    _max_key = Maximum()
+    
+    def __init__(self, channels):
+        super(ReadChannel, self).__init__(self.__reader__)
+        self.channels = channels
+        self._states = [None for _ in range(len(channels))]
+
+    @gen.coroutine
+    def __reader__(self, thischan):
+        r = None
+        self._futures = [chan.next() for chan in self.channels]
+        r = yield super(CoGroupChannel, self).__reader__(self)
+        raise gen.Return(r)
+    
+    @gen.coroutine
+    def __next_item__(self):
+        pairs = []
+        next_reads = []
+        
+        last_key = self._last_key
+        next_key = self._max_key
+        
+        # Get the next states of the futures.
+        for i, future in enumerate(list(self._futures)):
+            try:
+                pair = yield future
+                # Must be greater than last key to be a candidate.
+                if pair[0] > last_key:
+                    # Less than means new candidate key.
+                    if pair[0] < next_key:
+                        next_reads[:] = [(i, pair)]
+                        next_key = pair[0]
+                    # Equal means to include alongside other candidates.
+                    elif pair[0] == next_key:
+                        next_reads.append((i, pair))
+            except ChannelDone:
+                # Release reference to channel
+                self.channels[i] = None
+
+        # If there are no next_reads, there is no more work to be done.
+        if not next_reads:
+            # No qualified keys remaining.  We're done.
+            raise ChannelDone("Channel is done")
+        
+        # Propagates the guys with the lowest qualifying key to the state
+        # list, and asynchronously fetch their respective channel's next vals.
+        for i, pair in next_reads:
+            self._states[i] = pair
+            chan = self.channels[i]
+            if chan:
+                self._futures[i] = chan.next()
+
+        self._last_key = next_key
+        raise gen.Return(tuple(self._states))
+
+
 import flo.app
 import sys
 

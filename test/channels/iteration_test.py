@@ -369,3 +369,76 @@ class FlatMapChannelTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
 class FlatMapChannelByThreeTest(FlatMapChannelTest):
     INTERVAL = 3
 
+
+class CoGroupInterleavedChannelTest(ChannelTest, tt.AsyncTestCase):
+    _expected_vals = None
+
+    def expected_values(self, values):
+        if not self._expected_vals:
+            self._expected_vals = self.determine_expected_values(values)
+        return self._expected_vals[len(self._expected_vals) - len(values):]
+
+
+    def determine_expected_values(self, values):
+        # 3 channels, one has all vals, others have alternating.
+        vals = []
+        last = None
+        for i, val in enumerate(values):
+            vals.append((
+                (i, val) if i % 2 == 0 else last,
+                (i, val) if i % 2 == 1 else last,
+                (i, val)))
+            last = (i, val)
+        return vals
+
+
+    def reduce(self, iterable):
+        i = iter(iterable)
+        try:
+            last = next(i)
+            yield last
+            while True:
+                n = next(i)
+                if n != last:
+                    last = n
+                    yield n
+        except StopIteration:
+            pass
+
+
+    def get_channel_with_values(self, values):
+        values = self.expected_values(values)
+        numchans = len(values[0])
+        chans = [list(self.reduce(
+                    row[i] for row in values if row[i] is not None))
+                for i in range(numchans)]
+        chans = [channels.IterChannel(seq)
+                 for seq in chans]
+        return channels.CoGroupChannel(chans)
+
+
+    def verify_channel_values(self, chan, values, nesting=False):
+        return super(
+                CoGroupInterleavedChannelTest, self).verify_channel_values(
+                        chan, self.expected_values(values), nesting=nesting)
+
+
+class CoGroupIdenticalKeysChannelTest(CoGroupInterleavedChannelTest):
+    def determine_expected_values(self, values):
+        values = list(values)
+        return list(zip(
+            enumerate(values[:]),
+            enumerate(values[1:] + values[:1]),
+            enumerate(values[2:] + values[:2])))
+
+
+class CoGroupStaggeredKeysChannelTest(CoGroupInterleavedChannelTest):
+    def determine_expected_values(self, values):
+        values = list(values)
+        k = len(values) // 2
+        a = list(enumerate(values[:k]))
+        a += [a[-1] for _ in values[k:]]
+        b = [None for _ in values[:k]]
+        b += [(i + k, val) for i, val in enumerate(values[k:])]
+        return list(zip(a, b))
+
