@@ -253,6 +253,21 @@ class Channel(object):
         return CoGroupChannel([self] + list(channels))
 
 
+    def __getitem__(self, key_or_slice):
+        """
+        Access the `key_or_slice` of each item in the channel.
+
+        In the resulting `MapChannel`, the `key_or_slice` of each item is
+        propagated.
+
+        For instance...
+
+            hashchan = IterChannel(({"a": "A"}, {"a": "B"}))
+            a_chan = hashchan["a"] # "A", "B"
+        """
+        return MapChannel(self, lambda item: item[key_or_slice])
+
+
 class ReadChannel(Channel):
     """
     Wraps any channel with a read-only interface.

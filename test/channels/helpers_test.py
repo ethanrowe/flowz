@@ -73,6 +73,23 @@ class TestChannelHelpers(object):
                     [self.channel] + chans)
 
 
+    def test_index_helper(self):
+        with mock.patch.object(chn, 'MapChannel') as mc:
+            idx = mock.Mock(name='Index')
+            r = self.channel[idx]
+            # We get a mapchannel back
+            tools.assert_equal(mc.return_value, r)
+            # It was created with two args, the first of which
+            # is the channel itself.
+            tools.assert_equal(2, len(mc.call_args[0]))
+            tools.assert_equal(self.channel, mc.call_args[0][0])
+            # The second argument is a mapper function that looks up
+            # the specified index from its argument.
+            func  = mc.call_args[0][1]
+            val = mock.Mock(name='Value')
+            tools.assert_equal(val, func({idx: val}))
+
+
 
 class TestTeeChannelHelpers(TestChannelHelpers):
     CLASS = chn.TeeChannel
