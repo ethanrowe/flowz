@@ -153,6 +153,106 @@ class Channel(object):
         raise gen.Return(val)
 
 
+    def tee(self):
+        """
+        Returns a `TeeChannel` of self, for multiple read paths.
+
+        The resulting channel will emit all the same values as `self` from
+        the point of instantiation forward.
+        """
+        return TeeChannel(self)
+
+
+    def map(self, mapper):
+        """
+        Returns a `MapChannel` of self with the given `mapper` function.
+
+        In the resulting channel, the `mapper` will be called per item and
+        its result emitted.
+        """
+        return MapChannel(self, mapper)
+
+
+    def flat_map(self, mapper):
+        """
+        Returns a `FlatMapChannel` of self with the given `mapper` function.
+
+        In the resulting channel, the `mapper` will be called per item and is
+        expected to produce an iterable; each item in the iterable will be
+        emitted (in order) from the channel.
+        """
+        return FlatMapChannel(self, mapper)
+
+
+    def each_ready(self):
+        """
+        Emit result of each future in order.
+
+        In the resulting `FutureChannel`, each item in `self` is emitted after
+        it is ready; if the item is a `tornado.concurrent.Future`, it will be
+        waited on and its result emitted.  If the item is not a future, it is
+        emitted right away.
+
+        This maintains order of the original channel, so if some futures take
+        longer than others, they can act as a bottleneck.
+        """
+        return FutureChannel(self)
+
+
+    def as_ready(self):
+        """
+        Emit channel items as futures become ready.
+
+        In the resulting `ReadyFutureChannel`, the items in `self` are emitted
+        as they become ready, independent of their original channel order.
+
+        Items that are `tornado.concurrent.Future` will be waited on; items that
+        are not are considered "ready" immediately.
+
+        This doesn't preserve order of the original channel, but allows things to
+        be consumed as they are ready, which can provide better throughput depending
+        on your workload.
+        """
+        return ReadyFutureChannel(self)
+
+
+    def zip(self, *channels):
+        """
+        zip channel items together akin to build-in `zip` function.
+
+        In the resulting `ZipChannel`, the items in `self` and all channels
+        specified will be zipped together on a per-item basis.  The channel on
+        which you're invoking `zip` will be the first, and items from the other
+        channels will follow their order of specification in parameters.
+
+        So...
+
+            zipped = a.zip(b, c)
+
+            yield zipped.next() --> (a0, b0, c0)
+            yield zipped.next() --> (a1, b1, c1)
+            ...
+
+        """
+        return ZipChannel([self] + list(channels))
+
+
+    def cogroup(self, *channels):
+        """
+        cogroup channels of (key, value) items by keys ascending.
+
+        Assuming `self` and all `channels` are structured with items of
+        `(key, value)` pairs, and all emit items in ascending sort order of
+        keys, emits the tuples of pairs across the channels such that we walk
+        the total set of distinct keys in ascending order, and per channel,
+        the pair with the greatest key less than or equal to the current key
+        is emitted.
+
+        See the `CoGroupChannel` for more.
+        """
+        return CoGroupChannel([self] + list(channels))
+
+
 class ReadChannel(Channel):
     """
     Wraps any channel with a read-only interface.
