@@ -9,6 +9,7 @@ from tornado import ioloop
 from tornado import testing as tt
 
 from flo import app
+from flo import channels
 from flo import targets
 
 COUNTER = itertools.count()
@@ -54,6 +55,25 @@ class ProducerTarget(targets.Target):
         raise gen.Return(r)
 
 
+def mock_channel(*callables):
+    chan = mock.Mock(name='MockChannel%d' % next(COUNTER), spec={})
+    chan.tocall = list(callables)
+    chan.doneflag = False
+    @gen.coroutine
+    def _next():
+        try:
+            yield gen.sleep(0.01)
+            raise gen.Return(chan.tocall.pop(0)())
+        except IndexError:
+            chan.doneflag = True
+            raise channels.ChannelDone
+    chan.next = mock.Mock()
+    chan.done = mock.Mock()
+    chan.next.side_effect = _next
+    chan.done.side_effect = lambda: chan.doneflag
+    return chan
+
+
 def blow_up(exception):
     raise exception
 
@@ -97,7 +117,12 @@ class TestFlowApplication(object):
     def do_flow(self, targets, output=None):
         loop = ioloop.IOLoop()
         loop.make_current()
-        flo = app.Flo(targets)
+        if callable(targets):
+            flo = app.Flo([])
+            targets = targets(flo)
+            flo.add_targets(targets)
+        else:
+            flo = app.Flo(targets)
         if output is not None:
             output.append(loop)
             output.append(flo)
@@ -160,6 +185,73 @@ class TestFlowApplication(object):
         tools.assert_equal(
                 [t.callable.return_value for t in (a, b, c)],
                 [t.future().result() for t in (a, b, c)])
+
+
+    def test_single_channel(self):
+        a, b, c = mock.Mock(), mock.Mock(), mock.Mock()
+        chan = mock_channel(a, b, c)
+
+        loop, flo = self.run_flo([chan])
+
+        # Next was called four times, it blows up on the fourth.
+        tools.assert_equal([((), {})] * 4, chan.next.call_args_list)
+
+        # The underlying guys were invoked.
+        a.assert_called_once_with()
+        b.assert_called_once_with()
+        c.assert_called_once_with()
+
+        tools.assert_true(chan.done())
+
+
+    def test_two_channels(self):
+        a, b, c, d, e, f, g, h = (mock.Mock() for i in range(8))
+        chan1 = mock_channel(a, b, c)
+        chan2 = mock_channel(d, e, f, g, h)
+
+        loop, flo = self.run_flo([chan1, chan2])
+
+        # Next called four times on first guy.
+        tools.assert_equal([((), {})] * 4, chan1.next.call_args_list)
+
+        # But called six times on second guy, since he takes longer to blow up.
+        tools.assert_equal([((), {})] * 6, chan2.next.call_args_list)
+
+        tools.assert_true(chan1.done() and chan2.done())
+
+
+    def test_nested_channels(self):
+        chans = []
+        def build_targets(flo):
+            def spawn(child, result):
+                def f():
+                    flo.add_targets([child])
+                    return result
+                return f
+
+            bottom_a = mock_channel(*(mock.Mock() for _ in range(10)))
+            bottom_b = mock_channel(*(mock.Mock() for _ in range(7)))
+
+            middle = mock_channel(spawn(bottom_b, 'b'), mock.Mock(),
+                    spawn(bottom_a, 'a'))
+
+            top = mock_channel(mock.Mock(), mock.Mock(), spawn(middle, 'm'))
+
+            # Add channel/numitems pairs
+            chans.append((top, 3))
+            chans.append((middle, 3))
+            chans.append((bottom_a, 10))
+            chans.append((bottom_b, 7))
+
+            return [top]
+
+        loop, flo = self.run_flo(build_targets)
+
+        for chan, numitems in chans:
+            tools.assert_equal([((), {})] * (numitems + 1),
+                    chan.next.call_args_list)
+
+            tools.assert_true(chan.done())
 
 
     def test_exception_handling(self):

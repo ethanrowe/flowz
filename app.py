@@ -4,6 +4,8 @@ import sys
 from tornado import gen
 from tornado import ioloop
 
+from . import channels
+
 class Flo(object):
     """
     Class for managing data processing workflows.
@@ -56,7 +58,16 @@ class Flo(object):
         Forces app to stop on unhandled exceptions.
         """
         try:
-            result = yield target.future()
+            result = None
+            if hasattr(target, 'future'):
+                result = yield target.future()
+            else:
+                # Assume it's a channel.
+                try:
+                    while True:
+                        yield target.next()
+                except channels.ChannelDone:
+                    pass
         except Exception as e:
             self.exc_info = sys.exc_info()
             self.loop.stop()
@@ -85,7 +96,11 @@ class Flo(object):
     def main(self):
         targets = self.targets
         wrap = self.wrap_target
-        results = yield dict((k, wrap(target))
+        while self.targets and getattr(self, 'exc_info') is None:
+            yield gen.moment
+            targets = self.targets
+            self.targets = {}
+            yield dict((k, wrap(target))
                 for k, target in targets.items())
         self.loop.stop()
 
