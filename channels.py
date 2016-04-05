@@ -383,6 +383,23 @@ class FlatMapChannel(MapChannel):
             head.set_exception(e)
 
 
+class FilterChannel(FlatMapChannel):
+    """
+    Filters a source channel, passing through items that pass a predicate test.
+
+    Given some input channel `channel`, and some predicate test callable
+    `predicate`, the `FilterChannel` will consume `channel` and only emit
+    items for which `predicate(item)` is `True`.
+    """
+
+    def __init__(self, channel, predicate):
+        super(MapChannel, self).__init__(channel)
+        self.__transform__ = self.make_transform(predicate)
+
+
+    @classmethod
+    def make_transform(cls, predicate):
+        return lambda x: (x,) if predicate(x) else ()
 
 
 class FutureChannel(ReadChannel):

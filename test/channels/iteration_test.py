@@ -322,7 +322,41 @@ class MapChannelTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
         return super(MapChannelTest, self).verify_channel_values(
                 chan, self.expected_values(values), nesting=nesting)
 
-    
+
+class FilterChannelTest(ChannelTest, tt.AsyncTestCase):
+    def valset(self, values):
+        if not hasattr(self, '_valset'):
+            self._valset = set(
+                    v for i, v in enumerate(values)
+                    if i % 2 == 0)
+        return self._valset
+
+
+    def expected_values(self, values):
+        return [v for v in values if v in self.valset(values)]
+
+
+    def get_channel_with_values(self, values):
+        vals = self.valset(values)
+        c = channels.IterChannel(values)
+        return channels.FilterChannel(c, lambda val: val in vals)
+
+
+    def verify_channel_values(self, chan, values, nesting=False):
+        return super(FilterChannelTest, self).verify_channel_values(
+                chan, self.expected_values(values),
+                nesting=nesting)
+
+
+class FilterChannelReverseTest(FilterChannelTest):
+    def valset(self, values):
+        if not hasattr(self, '_valset'):
+            self._valset = set(
+                    v for i, v in enumerate(values)
+                    if i % 2 == 1)
+        return self._valset
+
+
 class FlatMapChannelTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
     INTERVAL = 2
 
