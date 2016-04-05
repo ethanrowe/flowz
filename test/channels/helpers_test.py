@@ -73,6 +73,14 @@ class TestChannelHelpers(object):
                     [self.channel] + chans)
 
 
+    def test_filter_method(self):
+        func = mock.Mock(name='PredicateFunction')
+        with mock.patch.object(chn, 'FilterChannel') as fc:
+            self.verify_delegation(self.channel.filter(func),
+                    fc,
+                    self.channel, func)
+
+
     def test_index_helper(self):
         with mock.patch.object(chn, 'MapChannel') as mc:
             idx = mock.Mock(name='Index')
@@ -145,4 +153,8 @@ class TestMapChannelHelpers(TestChannelHelpers):
 
 class TestFlatMapChannelHelpers(TestChannelHelpers):
     CLASS = chn.FlatMapChannel
+
+
+class TestFilterChannelHelpers(TestMapChannelHelpers):
+    CLASS = chn.FilterChannel
 

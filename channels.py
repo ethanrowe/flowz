@@ -184,6 +184,17 @@ class Channel(object):
         return FlatMapChannel(self, mapper)
 
 
+    def filter(self, predicate):
+        """
+        Returns a `FilterChannel` of self with the given `predicate` function.
+
+        In the resulting channel, the `predicate` will be called per item and
+        is expected to produce a truth value; items for which `predicate`
+        produces a non-true result will be discarded.
+        """
+        return FilterChannel(self, predicate)
+
+
     def each_ready(self):
         """
         Emit result of each future in order.
