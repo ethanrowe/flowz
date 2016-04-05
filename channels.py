@@ -142,7 +142,10 @@ class Channel(object):
             yield self.start()
 
         try:
-            next_f, val = yield self.__future__
+            next_f, read_f, val = yield self.__future__
+            # Indicate that this guy has been read.
+            if not read_f.done():
+                read_f.set_result(True)
             self.__future__ = next_f
         except ChannelDone as e:
             self.__done__ = True
@@ -302,8 +305,12 @@ class ReadChannel(Channel):
             while not self.__done__:
                 value = yield self.__next_item__()
                 next_f = cc.Future()
-                head.set_result((next_f, value))
+                read_f = cc.Future()
+                head.set_result((next_f, read_f, value))
                 head = next_f
+                # Block until something has read that last result.
+                yield read_f
+                yield gen.moment
         except ChannelDone:
             head.set_exception(ChannelDone("Channel is done"))
         except Exception as e:
@@ -374,8 +381,12 @@ class FlatMapChannel(MapChannel):
                     if self.__done__:
                         break
                     next_f = cc.Future()
-                    head.set_result((next_f, subitem))
+                    read_f = cc.Future()
+                    head.set_result((next_f, read_f, subitem))
                     head = next_f
+                    # Block until something has read that item.
+                    yield read_f
+                    yield gen.moment
 
         except ChannelDone:
             head.set_exception(ChannelDone("Channel is done"))
@@ -451,8 +462,8 @@ class ReadyFutureChannel(ReadChannel):
             else:
                 head_new, head_old = cc.Future(), self.__head__
                 self.__head__ = head_new
-                head_old.set_result((head_new, f.result()))
-
+                read_f = cc.Future()
+                head_old.set_result((head_new, read_f, f.result()))
                 if self._read_done and not self._waiting:
                     self.__head__.set_exception(ChannelDone("Channel is done"))
 
@@ -568,7 +579,7 @@ class ProducerChannel(Channel):
         else:
             next_f = cc.Future()
             self.__head__ = next_f
-            last_f.set_result((next_f, item))
+            last_f.set_result((next_f, cc.Future(), item))
         raise gen.Return(True)
 
 
