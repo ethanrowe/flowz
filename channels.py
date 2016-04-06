@@ -765,6 +765,9 @@ class CoGroupChannel(ReadChannel):
         pairs = []
         next_reads = []
         
+        # Note that to ensure MAXIMUM and MINIMUM control comparisons with
+        # new keys, comparisons should always use last_key/next_key as the
+        # first operator of the comparison operator.
         last_key = self._last_key
         next_key = self._max_key
         
@@ -773,13 +776,14 @@ class CoGroupChannel(ReadChannel):
             try:
                 pair = yield future
                 # Must be greater than last key to be a candidate.
-                if pair[0] > last_key:
+                if last_key < pair[0]:
                     # Less than means new candidate key.
-                    if pair[0] < next_key:
+                    # Must be less than next key to be candidate key
+                    if next_key > pair[0]:
                         next_reads[:] = [(i, pair)]
                         next_key = pair[0]
                     # Equal means to include alongside other candidates.
-                    elif pair[0] == next_key:
+                    elif next_key == pair[0]:
                         next_reads.append((i, pair))
             except ChannelDone:
                 # Release reference to channel

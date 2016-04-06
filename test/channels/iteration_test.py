@@ -1,3 +1,4 @@
+import datetime
 import itertools
 
 import mock
@@ -464,6 +465,19 @@ class CoGroupIdenticalKeysChannelTest(CoGroupInterleavedChannelTest):
             enumerate(values[:]),
             enumerate(values[1:] + values[:1]),
             enumerate(values[2:] + values[:2])))
+
+
+class CoGroupInterleavedTimeKeyChannelTest(CoGroupInterleavedChannelTest):
+    def determine_expected_values(self, values):
+        td = datetime.timedelta(days=1)
+        base = datetime.datetime(2016, 2, 1)
+        values = super(
+                CoGroupInterleavedTimeKeyChannelTest,
+                self).determine_expected_values(values)
+        # Convert integer keys to datetimes.
+        return [tuple((base + (kv[0] * td), kv[1])
+                    if kv else kv for kv in row)
+                for row in values]
 
 
 class CoGroupStaggeredKeysChannelTest(CoGroupInterleavedChannelTest):
