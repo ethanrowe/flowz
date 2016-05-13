@@ -4,7 +4,7 @@ import sys
 import mock
 from nose import tools
 
-from flo import util
+from flowz import util
 
 def min_lt(f):
     @functools.wraps(f)

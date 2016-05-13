@@ -1,7 +1,7 @@
 import mock
 from nose import tools
 
-from flo import channels as chn
+from flowz import channels as chn
 
 class TestChannelHelpers(object):
     def setup(self):

@@ -8,9 +8,9 @@ from tornado import gen
 from tornado import ioloop
 from tornado import testing as tt
 
-from flo import app
-from flo import channels
-from flo import targets
+from flowz import app
+from flowz import channels
+from flowz import targets
 
 COUNTER = itertools.count()
 

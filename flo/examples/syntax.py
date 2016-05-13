@@ -1,6 +1,6 @@
 from __future__ import print_function
-from flo import app
-from flo import channels
+from flowz import app
+from flowz import channels
 
 
 # 0 to 9.

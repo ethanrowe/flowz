@@ -1,7 +1,7 @@
 import mock
 from nose import tools
 
-from flo import util
+from flowz import util
 
 def mockfunc():
     m = mock.Mock(name='MockFunction')

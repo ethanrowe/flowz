@@ -1,5 +1,5 @@
-from flo.app import Flo
-from flo.channels import *
+from flowz.app import Flo
+from flowz.channels import *
 
 @gen.coroutine
 def starter(chan):

@@ -73,7 +73,7 @@ class LastResult(object):
         f(2)
 
     The `first` callable is optional; when not given, `func` is called for all
-    invocations, but for the very first call, the constant `flo.util.NO_VALUE` is
+    invocations, but for the very first call, the constant `flowz.util.NO_VALUE` is
     used in place of the nonexistent previous result.
 
     The following would give exactly the same behavior as before:

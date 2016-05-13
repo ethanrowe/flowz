@@ -11,7 +11,7 @@ class Flo(object):
     Class for managing data processing workflows.
 
     A `Flo` is given some number of `targets`, which must implement a minimal
-    interface as demonstrated by `flo.targets.Target`.
+    interface as demonstrated by `flowz.targets.Target`.
 
     The `Flo` can then be `run()`, and it will run a `tornado.ioloop.IOLoop`
     until all `targets` have completed, at which point `run()` will return

@@ -29,7 +29,7 @@ class Target(object):
     - A `Target` has a `start()` method that is a tornado-comp. coroutine,
       which backs the `future()` method.
 
-    Users of the `Target` (namely, a `flo.app.Flo` object, or other `Target`
+    Users of the `Target` (namely, a `flowz.app.Flo` object, or other `Target`
     objects) should only deal with `future()`; the presence of `start` is
     specific to this class.  The `future()` in this case is responsible for
     doing `start()` once and only once; the resulting future is remembered and

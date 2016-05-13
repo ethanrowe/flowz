@@ -5,7 +5,7 @@ from nose import tools
 from tornado import gen
 from tornado import testing as tt
 
-from flo import targets
+from flowz import targets
 
 COUNTER = itertools.count()
 

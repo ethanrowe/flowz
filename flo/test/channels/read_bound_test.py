@@ -3,7 +3,7 @@ from nose import tools
 from tornado import gen
 from tornado import testing as tt
 
-from flo import channels
+from flowz import channels
 
 @gen.coroutine
 def drain(channel, per_read=lambda x: x):

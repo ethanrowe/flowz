@@ -6,7 +6,7 @@ from nose import tools
 from tornado import gen
 from tornado import testing as tt
 
-from flo import channels
+from flowz import channels
 
 @gen.coroutine
 def raises_channel_done(channel):
