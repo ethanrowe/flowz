@@ -7,6 +7,7 @@ setup(
     url = 'https://github.com/ethanrowe/flowz',
     author = 'Ethan Rowe',
     author_email = 'ethan@the-rowes.com',
+    license = 'MIT',
     test_suite = 'nose.collector',
     packages = [
         'flowz',
