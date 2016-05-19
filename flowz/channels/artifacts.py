@@ -6,7 +6,7 @@ import logging
 from tornado import concurrent
 from tornado import gen
 
-from . import channels
+from flowz import channels
 
 
 class AbstractArtifact(object):

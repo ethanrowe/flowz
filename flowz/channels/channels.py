@@ -6,7 +6,7 @@ from tornado import gen
 from tornado import ioloop as iol
 from tornado import locks
 
-from . import util
+from flowz import util
 
 class ChannelDone(Exception):
     """
