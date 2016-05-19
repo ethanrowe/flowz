@@ -6,7 +6,7 @@ from tornado import gen
 from tornado import ioloop as iol
 from tornado import locks
 
-from . import util
+from flowz import util
 
 class ChannelDone(Exception):
     """
@@ -415,6 +415,7 @@ class FilterChannel(FlatMapChannel):
     """
 
     def __init__(self, channel, predicate):
+        # This deliberately accesses MapChannel's super
         super(MapChannel, self).__init__(channel)
         self.__transform__ = self.make_transform(predicate)
 
@@ -667,6 +668,7 @@ class ZipChannel(ReadChannel):
     as any of its source channels reach that state.
     """
     def __init__(self, channels):
+        # This deliberately accesses ReadChannel's super
         super(ReadChannel, self).__init__(self.__reader__)
         self.__channels__ = channels
 
@@ -804,4 +806,3 @@ class CoGroupChannel(ReadChannel):
 
         self._last_key = next_key
         raise gen.Return(tuple(self._states))
-
