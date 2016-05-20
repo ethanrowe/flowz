@@ -30,17 +30,14 @@ class AbstractArtifact(object):
             self._as_string = '%s<%s>' % (type(self).__name__, name)
             self.name = name
 
-
     def __str__(self):
         return self._as_string
-
 
     def exists(self):
         """
         Returns True if the artifact already exists; False otherwise.
         """
         return self.__exists__
-
 
     def ensure(self):
         """
@@ -51,7 +48,6 @@ class AbstractArtifact(object):
             self.__ensure__ = self.__start_ensure__()
         return self.__ensure__
 
-
     @gen.coroutine
     def __start_ensure__(self):
         """
@@ -59,7 +55,6 @@ class AbstractArtifact(object):
         """
         yield self.get()
         raise gen.Return(True)
-
 
     def get(self):
         """
@@ -70,12 +65,10 @@ class AbstractArtifact(object):
             self.__get__ = self.__start_get__()
         return self.__get__
 
-
     @gen.coroutine
     def __start_get__(self):
         self.__exists__ = True
         raise gen.Return(self)
-
 
     def as_channel(self):
         """
@@ -83,13 +76,11 @@ class AbstractArtifact(object):
         """
         return channels.IterChannel(a for a in (self,))
 
-
     def value_channel(self):
         """
         Returns a channel with self's artifact when it's ready.
         """
         return self.as_channel().map(lambda a: a.get()).each_ready()
-
 
     def ensure_channel(self):
         """
@@ -109,12 +100,10 @@ class ExtantArtifact(AbstractArtifact):
         super(ExtantArtifact, self).__init__(logger=logger, name=name)
         self.getter = getter
 
-
     @gen.coroutine
     def __start_ensure__(self):
         # It is known to exist, so there's nothing to ensure.
         raise gen.Return(True)
-
 
     @gen.coroutine
     def __start_get__(self):
@@ -133,7 +122,6 @@ class TransformArtifact(AbstractArtifact):
                 kw.get('logger'), kw.get('name'))
         self.sources = sources
         self.transform = transform
-
 
     @gen.coroutine
     def __start_get__(self):
@@ -163,7 +151,6 @@ class ThreadedTransformArtifact(AbstractArtifact):
         self.transform = transform
         self.executor = executor
 
-
     @concurrent.run_on_executor
     def __transform__(self, *sources):
         try:
@@ -171,7 +158,6 @@ class ThreadedTransformArtifact(AbstractArtifact):
         except:
             self.logger.exception("Transformation failure.")
             raise
-
 
     @gen.coroutine
     def __start_get__(self):
@@ -188,14 +174,11 @@ class PassthruTransformArtifact(AbstractArtifact):
         self.original = original
         self.transformer = transformer
 
-
     def exists(self):
         return self.original.exists()
 
-
     def __getattr__(self, attr):
         return getattr(self.original, attr)
-
 
     def __getitem__(self, item):
         try:
@@ -204,10 +187,8 @@ class PassthruTransformArtifact(AbstractArtifact):
             # Want the KeyError to originate here.
             raise KeyError("No such key: %s" % repr(item))
 
-
     def ensure(self):
         return self.original.ensure()
-
 
     @gen.coroutine
     def __start_get__(self):
