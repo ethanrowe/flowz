@@ -301,9 +301,24 @@ class KeyedArtifact(WrappedArtifact):
         return iter((self.key, self))
 
     def transform(self, func, *params, **kw):
+        """
+        Create a KeyedArtifact that transforms the value of this artifact, but preserves
+        the same key.
+
+        @param func: a synchronous function
+        @param params: the initial parameter to func, to which this artifacts value will be appended
+        """
         params += (self.value,)
         return KeyedArtifact(self.key, DerivedArtifact(func, *params, **kw))
 
     def threaded_transform(self, executor, func, *params, **kw):
+        """
+        Create a KeyedArtifact that transforms the value of this artifact, but preserves
+        the same key.  The transformation will run on a separate thread.
+
+        @param executor: the thread pool executor
+        @param func: a synchronous function
+        @param params: the initial parameter to func, to which this artifacts value will be appended
+        """
         params += (self.value,)
         return KeyedArtifact(self.key, ThreadedDerivedArtifact(executor, func, *params, **kw))
