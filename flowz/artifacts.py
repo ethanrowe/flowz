@@ -97,6 +97,11 @@ class ExtantArtifact(AbstractArtifact):
     __exists__ = True
 
     def __init__(self, getter, logger=None, name=None):
+        """
+        Create an artifact that is known to exist and asynchronously retrievable.
+
+        @param getter: An asynchronous coroutine to get the value
+        """
         super(ExtantArtifact, self).__init__(logger=logger, name=name)
         self.getter = getter
 
@@ -118,6 +123,12 @@ class DerivedArtifact(AbstractArtifact):
     """
 
     def __init__(self, deriver, *sources, **kw):
+        """
+        Create an artifact that needs to be derived from some sources.
+
+        @param deriver: a synchronous function to derive the value
+        @param sources: zero or more sources that can be synchronous or asychronous
+        """
         super(DerivedArtifact, self).__init__(
                 kw.get('logger'), kw.get('name'))
         self.sources = sources
@@ -134,6 +145,7 @@ class DerivedArtifact(AbstractArtifact):
         except:
             self.logger.exception("%s failure." % str(self))
             raise
+        self.__exists__ = True
         self.logger.info("%s ready." % str(self))
         self.sources = None
         self.deriver = None
@@ -146,11 +158,14 @@ class ThreadedDerivedArtifact(DerivedArtifact):
     """
 
     def __init__(self, executor, deriver, *sources, **kw):
+        """
+        Create an artifact that does its derivation on a thread pool executor
+        @param executor: the thread pool executor on which to run
+        @param deriver: a synchronous function to derive the value
+        @param sources: zero or more sources that can be synchronous or asychronous
+        """
         super(ThreadedDerivedArtifact, self).__init__(deriver, *sources, **kw)
         self.logger.info("%s created (%s)." % (str(self), self.name))
-        #TODO Remove
-        #if not self.name:
-        #    raise Exception("I want a name!")
         self.executor = executor
 
     @concurrent.run_on_executor
@@ -167,68 +182,79 @@ class ThreadedDerivedArtifact(DerivedArtifact):
         self.logger.info("%s waiting on sources." % str(self))
         sources = yield [maybe_artifact(source) for source in self.sources]
         result = yield self.__derive__(*sources)
+        self.__exists__ = True
+        self.logger.info("%s ready." % str(self))
         self.sources = None
         self.deriver = None
         raise gen.Return(result)
 
-    # TODO Remove
-    def __repr__(self):
-        return self.__str__()
-
 
 class WrappedArtifact(AbstractArtifact):
     """
-    An artifact that wraps another artifact (the "original"), passing through all
+    An artifact that wraps another artifact (the "value"), passing through most
     calls to it.
 
     This class is effectively abstract, since it provides little value when directly used.
     """
 
-    def __init__(self, original, logger=None, name=None):
+    def __init__(self, value, logger=None, name=None):
+        """
+        Create an artifact that wraps another artifact (the "value"), passing through most
+        calls to it.
+
+        @param value: another artifact
+        """
         super(WrappedArtifact, self).__init__(logger=logger, name=name)
-        self.original = original
+        self.value = value
 
     def exists(self):
-        return self.original.exists()
+        return self.value.exists()
 
     def ensure(self):
-        return self.original.ensure()
+        return self.value.ensure()
 
     def __getattr__(self, attr):
-        return getattr(self.original, attr)
+        return getattr(self.value, attr)
 
     def __getitem__(self, item):
         try:
-            return self.original[item]
+            return self.value[item]
         except KeyError:
             # Want the KeyError to originate here.
             raise KeyError("No such key: %s" % repr(item))
 
     @gen.coroutine
     def __start_get__(self):
-        value = yield maybe_artifact(self.original)
+        value = yield maybe_artifact(self.value)
         raise gen.Return(value)
 
 
 class TransformedArtifact(WrappedArtifact):
     """
-    A WrappedArtifact that transform the value of its original artifact
+    A WrappedArtifact that transforms the value of the wrapped artifact
     """
 
-    def __init__(self, original, transformer=lambda x: x, logger=None, name=None):
-        super(TransformedArtifact, self).__init__(original, logger=logger, name=name)
+    def __init__(self, value, transformer=lambda x: x, logger=None, name=None):
+        """
+        Create an artifact that transforms the value of its wrapped artifact.
+
+        @param value: another artifact
+        @param transformer: a synchronous function
+        """
+        super(TransformedArtifact, self).__init__(value, logger=logger, name=name)
         self.transformer = transformer
 
     @gen.coroutine
     def __start_get__(self):
-        value = yield maybe_artifact(self.original)
+        value = yield maybe_artifact(self.value)
         yield gen.moment
         value = self.transformer(value)
         raise gen.Return(value)
 
 
 def maybe_artifact(value):
-    if hasattr(value, 'get'):
+    # Still duck typing for "artifacts", for now
+    if hasattr(value, 'get') and hasattr(value, 'exists') and hasattr(value, 'ensure'):
         return value.get()
     return gen.maybe_future(value)
 
@@ -257,8 +283,8 @@ class KeyedArtifact(WrappedArtifact):
     pairs, directly, for things like cogrouping.
     """
 
-    def __init__(self, key, original, logger=None, name=None):
-        super(KeyedArtifact, self).__init__(original, logger=logger, name=name)
+    def __init__(self, key, value, logger=None, name=None):
+        super(KeyedArtifact, self).__init__(value, logger=logger, name=name)
         self.key = key
 
     def __getitem__(self, idx):
@@ -275,9 +301,9 @@ class KeyedArtifact(WrappedArtifact):
         return iter((self.key, self))
 
     def transform(self, func, *params, **kw):
-        params += (self.original,)
+        params += (self.value,)
         return KeyedArtifact(self.key, DerivedArtifact(func, *params, **kw))
 
     def threaded_transform(self, executor, func, *params, **kw):
-        params += (self.original,)
+        params += (self.value,)
         return KeyedArtifact(self.key, ThreadedDerivedArtifact(executor, func, *params, **kw))
