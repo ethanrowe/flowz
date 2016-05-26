@@ -1,5 +1,4 @@
 import datetime
-import itertools
 
 import mock
 from nose import tools
@@ -7,15 +6,7 @@ from tornado import gen
 from tornado import testing as tt
 
 from flowz import channels
-
-@gen.coroutine
-def raises_channel_done(channel):
-    try:
-        yield channel.next()
-        raise Exception("ChannelDone not raised!")
-    except channels.ChannelDone:
-        # This just increments the test count,
-        tools.assert_equal(True, True)
+from .util import raises_channel_done
 
 
 @gen.coroutine
