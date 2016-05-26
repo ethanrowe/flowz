@@ -1,3 +1,4 @@
+import functools
 
 class AbstractChannelAccessor(object):
     channel = None
@@ -49,4 +50,17 @@ class ChannelManager(object):
             return accessor.get()
         except KeyError:
             raise KeyError("No such key %s" % repr(key))
+
+
+def channelproperty(fn):
+    @functools.wraps(fn)
+    def wrapped(self):
+        manager = self.channel_manager
+        name = fn.__name__
+        try:
+            return manager[name]
+        except KeyError:
+            manager.add_builder(name, lambda: fn(self))
+            return manager[name]
+    return property(wrapped)
 

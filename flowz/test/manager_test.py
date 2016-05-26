@@ -6,7 +6,7 @@ from nose import tools
 
 from flowz.channels import management
 
-def mock_channel():
+def mock_channel(name='mockchannel'):
     """
     A mock that supports tee()
 
@@ -14,7 +14,7 @@ def mock_channel():
     CALL_COUNT is the string version of the current count of the tee call.  That
     count starts at 0 and increments by 1 per tee call.
     """
-    m = mock.Mock()
+    m = mock.Mock(name=name)
     m.tee_count = iter(itertools.count(0))
     m.tee.side_effect = lambda: getattr(m.tee, 'call%d' % next(m.tee_count))
     return m
@@ -87,4 +87,78 @@ def test_channel_manager_channels():
     tools.assert_equal(chan_a.tee.call1, mgr[key_a])
     tools.assert_equal(chan_b.tee.call1, mgr[key_b])
 
+
+class TestChannelProperty(object):
+    BUILDERS = ('base_a', 'base_b', 'child_a', 'child_b', 'final')
+    
+    def setup(self):
+        self.channel_manager = management.ChannelManager()
+        self.builders = dict(
+                (name, mock.Mock(name='Builder<%s>' % name,
+                    return_value=mock_channel('Channel<%s>' %name)))
+                for name in self.BUILDERS)
+
+    def build(self, name, *args):
+        return self.builders[name](*args)
+
+    def chan(self, name):
+        return self.builders[name].return_value
+
+    @management.channelproperty
+    def base_a(self):
+        return self.build('base_a')
+
+    @management.channelproperty
+    def base_b(self):
+        return self.build('base_b')
+
+    @management.channelproperty
+    def child_a(self):
+        return self.build('child_a', self.base_a)
+
+    @management.channelproperty
+    def child_b(self):
+        return self.build('child_b', self.base_b)
+
+    @management.channelproperty
+    def final(self):
+        return self.build('final', self.child_a, self.child_b)
+
+    def verify_channel(self, name, callno):
+        expect = self.builders[name].return_value
+        if callno > 0:
+            expect = getattr(expect.tee, 'call%d' % (callno-1))
+    
+    def test_basic_properties(self):
+        # First access to base_a
+        tools.assert_equal(self.chan('base_a'), self.base_a)
+        # Second access to base_a should be a tee
+        tools.assert_equal(self.chan('base_a').tee.call0, self.base_a)
+        # First access to base_b
+        tools.assert_equal(self.chan('base_b'), self.base_b)
+        # Second access to base b should be a tee
+        tools.assert_equal(self.chan('base_b').tee.call0, self.base_b)
+        # Each builder should be called only once.
+        self.builders['base_a'].assert_called_once_with()
+        self.builders['base_b'].assert_called_once_with()
+
+
+    def test_composed_properties(self):
+        # First access to each of child_a, child_b
+        tools.assert_equal(self.chan('child_a'), self.child_a)
+        tools.assert_equal(self.chan('child_b'), self.child_b)
+
+        # First access to each of base_a, base_b in getting child.
+        self.builders['child_a'].assert_called_once_with(self.chan('base_a'))
+        self.builders['child_b'].assert_called_once_with(self.chan('base_b'))
+
+        # First access to final
+        tools.assert_equal(self.chan('final'), self.final)
+        # Second access to final
+        tools.assert_equal(self.chan('final').tee.call0, self.final)
+
+        # Second access to each of child_a, child_b in building final
+        self.builders['final'].assert_called_once_with(
+                self.chan('child_a').tee.call0,
+                self.chan('child_b').tee.call0)
 
