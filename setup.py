@@ -22,5 +22,5 @@ setup(
         ],
     install_requires = [
         'tornado >= 4.2',
+        'futures >= 3.0.5'
         ])
-
