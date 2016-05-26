@@ -93,7 +93,10 @@ class TestChannelProperty(object):
     
     def setup(self):
         self.channel_manager = management.ChannelManager()
-        self.builders = dict(
+        self.builders = self.assemble_builders()
+
+    def assemble_builders(self):
+        return dict(
                 (name, mock.Mock(name='Builder<%s>' % name,
                     return_value=mock_channel('Channel<%s>' %name)))
                 for name in self.BUILDERS)
@@ -161,4 +164,34 @@ class TestChannelProperty(object):
         self.builders['final'].assert_called_once_with(
                 self.chan('child_a').tee.call0,
                 self.chan('child_b').tee.call0)
+
+
+MANAGER_NAME = str(mock.Mock(name='AChannelManager'))
+prop = management.channelproperty(MANAGER_NAME)
+
+class TestChannelPropertyAlternateName(TestChannelProperty):
+    def setup(self):
+        setattr(self, MANAGER_NAME, management.ChannelManager())
+        self.builders = self.assemble_builders()
+
+    @prop
+    def base_a(self):
+        return self.build('base_a')
+
+    @prop
+    def base_b(self):
+        return self.build('base_b')
+
+    @prop
+    def child_a(self):
+        return self.build('child_a', self.base_a)
+
+    @prop
+    def child_b(self):
+        return self.build('child_b', self.base_b)
+
+    @prop
+    def final(self):
+        return self.build('final', self.child_a, self.child_b)
+
 

@@ -52,10 +52,10 @@ class ChannelManager(object):
             raise KeyError("No such key %s" % repr(key))
 
 
-def channelproperty(fn):
+def _channelproperty(manager_name, fn):
     @functools.wraps(fn)
     def wrapped(self):
-        manager = self.channel_manager
+        manager = getattr(self, manager_name)
         name = fn.__name__
         try:
             return manager[name]
@@ -63,4 +63,9 @@ def channelproperty(fn):
             manager.add_builder(name, lambda: fn(self))
             return manager[name]
     return property(wrapped)
+
+def channelproperty(fn_or_name):
+    if callable(fn_or_name):
+        return _channelproperty('channel_manager', fn_or_name)
+    return lambda fn: _channelproperty(fn_or_name, fn)
 
