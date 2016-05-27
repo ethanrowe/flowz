@@ -20,6 +20,8 @@ class ArtifactsTest(tt.AsyncTestCase):
     NUM_ORDERED_DICT = OrderedDict([(i, NUM_DICT[i]) for i in NUM_ARR])
     NUM_REVERSED_DICT = OrderedDict([(i, NUM_DICT[i]) for i in reversed(NUM_ARR)])
 
+    # Possible getter/deriver/transform functions
+
     @staticmethod
     @gen.coroutine
     def get_ordered_dict():
@@ -34,15 +36,6 @@ class ArtifactsTest(tt.AsyncTestCase):
         return OrderedDict([(i, orig_dict[i]) for i in reversed(orig_dict.keys())])
 
     @staticmethod
-    @gen.coroutine
-    def get_foo():
-        raise gen.Return('foo')
-
-    @staticmethod
-    def derive_foo():
-        return 'foo'
-
-    @staticmethod
     def derive_value(key, dict_):
         return dict_[key]
 
@@ -55,10 +48,16 @@ class ArtifactsTest(tt.AsyncTestCase):
 
     @staticmethod
     @gen.coroutine
-    def battery(artifact_maker, exp_value, first_exists):
+    def battery(artifact_maker, exp_value, exists_pre_get):
+        """
+        A batter of tests to run against a particular artifact type
+        @param artifact_maker: a callable to build the artifact
+        @param exp_value: the expected value of getting the artifact
+        @param exists_pre_get: the expect value of calling exists() before calling get()
+        """
         artifact = artifact_maker()
         tools.assert_true(ArtifactsTest.NAME in str(artifact))
-        tools.assert_equal(artifact.exists(), first_exists)
+        tools.assert_equal(artifact.exists(), exists_pre_get)
         tools.assert_true(artifact.ensure())
 
         value = yield artifact.get()
@@ -67,55 +66,77 @@ class ArtifactsTest(tt.AsyncTestCase):
         tools.assert_true(artifact.exists())
         tools.assert_true(artifact.ensure())
 
+        @gen.coroutine
+        def check_channel(channel, exp_value):
+            """
+            Validate a channel with one artifact in it
+            @param channel: the channel
+            @param exp_value: the expected value of the entry in the channel
+            """
+            result = yield channel.start()
+            tools.assert_true(result)
+
+            obj = yield channel.next()
+            # the object might be an artifact or a direct value
+            val = yield maybe_artifact(obj)
+            tools.assert_equal(val, exp_value)
+
+            yield raises_channel_done(channel)
+            raise gen.Return(True)
+
+        yield check_channel(artifact_maker().as_channel(), exp_value)
+        yield check_channel(artifact_maker().value_channel(), exp_value)
+        yield check_channel(artifact_maker().ensure_channel(), True)
+
         raise gen.Return(True)
 
     @tt.gen_test
     def test_extant_artifact(self):
-        func = lambda: ExtantArtifact(self.get_ordered_dict, name=self.NAME)
-        yield self.battery(func, self.NUM_ORDERED_DICT, True)
+        maker = lambda: ExtantArtifact(self.get_ordered_dict, name=self.NAME)
+        yield self.battery(maker, self.NUM_ORDERED_DICT, True)
 
     @tt.gen_test
     def test_derived_artifact(self):
-        func = lambda: DerivedArtifact(self.derive_ordered_dict, self.NUM_ARR,
-                                       self.NUM_DICT, name=self.NAME)
-        yield self.battery(func, self.NUM_ORDERED_DICT, False)
+        maker = lambda: DerivedArtifact(self.derive_ordered_dict, self.NUM_ARR,
+                                     self.NUM_DICT, name=self.NAME)
+        yield self.battery(maker, self.NUM_ORDERED_DICT, False)
 
     @tt.gen_test
     def test_threaded_derived_artifact(self):
         executor = futures.ThreadPoolExecutor(1)
-        func = lambda: ThreadedDerivedArtifact(executor, self.derive_ordered_dict,
-                                               self.NUM_ARR, self.NUM_DICT, name=self.NAME)
-        yield self.battery(func, self.NUM_ORDERED_DICT, False)
+        maker = lambda: ThreadedDerivedArtifact(executor, self.derive_ordered_dict,
+                                                self.NUM_ARR, self.NUM_DICT, name=self.NAME)
+        result = yield self.battery(maker, self.NUM_ORDERED_DICT, False)
 
     @tt.gen_test
     def test_wrapped_artifact(self):
-        func = lambda: WrappedArtifact(DerivedArtifact(self.derive_ordered_dict,
-                                                       self.NUM_ARR, self.NUM_DICT),
-                                       name=self.NAME)
-        yield self.battery(func, self.NUM_ORDERED_DICT, False)
+        maker = lambda: WrappedArtifact(DerivedArtifact(self.derive_ordered_dict,
+                                                        self.NUM_ARR, self.NUM_DICT),
+                                        name=self.NAME)
+        yield self.battery(maker, self.NUM_ORDERED_DICT, False)
 
     @tt.gen_test
     def test_transformed_artifact(self):
         # Try with an ExtantArtifact
-        func = lambda: TransformedArtifact(ExtantArtifact(self.get_ordered_dict),
-                                           self.transform_reversed_dict, name=self.NAME)
-        yield self.battery(func, self.NUM_REVERSED_DICT, True)
+        maker = lambda: TransformedArtifact(ExtantArtifact(self.get_ordered_dict),
+                                            self.transform_reversed_dict, name=self.NAME)
+        yield self.battery(maker, self.NUM_REVERSED_DICT, True)
 
         # Try with a DerivedArtifact
-        func = lambda: TransformedArtifact(DerivedArtifact(self.derive_ordered_dict,
-                                                           self.NUM_ARR, self.NUM_DICT),
-                                       self.transform_reversed_dict, name=self.NAME)
-        yield self.battery(func, self.NUM_REVERSED_DICT, False)
+        maker = lambda: TransformedArtifact(DerivedArtifact(self.derive_ordered_dict,
+                                                            self.NUM_ARR, self.NUM_DICT),
+                                            self.transform_reversed_dict, name=self.NAME)
+        yield self.battery(maker, self.NUM_REVERSED_DICT, False)
 
     @tt.gen_test
     def test_keyed_artifact(self):
         key = 1
-        func = lambda: KeyedArtifact(key,
-                                     DerivedArtifact(self.derive_value, key, self.NUM_DICT),
-                                     name=self.NAME)
-        yield self.battery(func, 'one', False)
+        maker = lambda: KeyedArtifact(key,
+                                      DerivedArtifact(self.derive_value, key, self.NUM_DICT),
+                                      name=self.NAME)
+        yield self.battery(maker, 'one', False)
 
-        artifact = func()
+        artifact = maker()
         tools.assert_equal(artifact[0], key)
         tools.assert_equal(artifact[1], artifact)
         tools.assert_equal(artifact['key'], key)
@@ -164,47 +185,3 @@ class ArtifactsTest(tt.AsyncTestCase):
         future3 = maybe_artifact(dict_)
         val3 = yield future3
         tools.assert_equal(val3, dict_)
-
-    # ****** End with helper methods on AbstractArtifact ******
-
-    @tt.gen_test
-    def test_as_channel(self):
-        artifact = ExtantArtifact(self.get_foo)
-        channel = artifact.as_channel()
-        result = yield channel.start()
-        tools.assert_true(result)
-
-        artifact2 = yield channel.next()
-        tools.assert_equal(artifact, artifact2)
-
-        val = yield artifact2.get()
-        tools.assert_equal(val, 'foo')
-
-        yield raises_channel_done(channel)
-
-    @tt.gen_test
-    def test_value_channel(self):
-        artifact = ExtantArtifact(self.get_foo)
-        channel = artifact.value_channel()
-        result = yield channel.start()
-        tools.assert_true(result)
-
-        val = yield channel.next()
-        tools.assert_equal(val, 'foo')
-
-        yield raises_channel_done(channel)
-
-    @tt.gen_test
-    def test_ensure_channel(self):
-        artifact = DerivedArtifact(self.derive_foo)
-        tools.assert_false(artifact.exists())
-        channel = artifact.ensure_channel()
-        result = yield channel.start()
-        tools.assert_true(result)
-
-        ensured = yield channel.next()
-        tools.assert_true(ensured)
-
-        tools.assert_true(artifact.exists())
-
-        yield raises_channel_done(channel)
