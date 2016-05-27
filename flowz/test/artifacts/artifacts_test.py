@@ -9,12 +9,12 @@ import tornado.concurrent
 from flowz.artifacts import (ExtantArtifact, DerivedArtifact, ThreadedDerivedArtifact,
                              WrappedArtifact, TransformedArtifact, KeyedArtifact,
                              maybe_artifact)
-from flowz.channels import ChannelDone
 
 from ..channels.util import raises_channel_done
 
 
 class ArtifactsTest(tt.AsyncTestCase):
+    NAME = "Fooble"
     NUM_ARR = [1, 2, 3, 4, 5]
     NUM_DICT = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
     NUM_ORDERED_DICT = OrderedDict([(i, NUM_DICT[i]) for i in NUM_ARR])
@@ -53,112 +53,69 @@ class ArtifactsTest(tt.AsyncTestCase):
                 return k
         return None
 
-    @tt.gen_test
-    def test_extant_artifact(self):
-        artifact = ExtantArtifact(self.get_ordered_dict, name="ExtantArtifactTester")
-
-        tools.assert_true("ExtantArtifactTester" in str(artifact))
-        tools.assert_true(artifact.exists())
+    @staticmethod
+    @gen.coroutine
+    def battery(artifact_maker, exp_value, first_exists):
+        artifact = artifact_maker()
+        tools.assert_true(ArtifactsTest.NAME in str(artifact))
+        tools.assert_equal(artifact.exists(), first_exists)
         tools.assert_true(artifact.ensure())
 
         value = yield artifact.get()
 
-        tools.assert_equal(value, self.NUM_ORDERED_DICT)
+        tools.assert_equal(value, exp_value)
+        tools.assert_true(artifact.exists())
+        tools.assert_true(artifact.ensure())
+
+        raise gen.Return(True)
+
+    @tt.gen_test
+    def test_extant_artifact(self):
+        func = lambda: ExtantArtifact(self.get_ordered_dict, name=self.NAME)
+        yield self.battery(func, self.NUM_ORDERED_DICT, True)
 
     @tt.gen_test
     def test_derived_artifact(self):
-        artifact = DerivedArtifact(self.derive_ordered_dict, self.NUM_ARR, self.NUM_DICT)
-
-        tools.assert_false(artifact.exists())
-
-        value = yield artifact.get()
-
-        tools.assert_equal(value, self.NUM_ORDERED_DICT)
-        tools.assert_true(artifact.exists())
-        tools.assert_true(artifact.ensure())
-
-        # Now call with a slightly different order, calling ensure() before get()
-        artifact = DerivedArtifact(self.derive_ordered_dict, self.NUM_ARR, self.NUM_DICT)
-
-        tools.assert_false(artifact.exists())
-        ensured = yield artifact.ensure()
-        tools.assert_true(ensured)
-
-        value = yield artifact.get()
-
-        tools.assert_equal(value, self.NUM_ORDERED_DICT)
-        tools.assert_true(artifact.exists())
+        func = lambda: DerivedArtifact(self.derive_ordered_dict, self.NUM_ARR,
+                                       self.NUM_DICT, name=self.NAME)
+        yield self.battery(func, self.NUM_ORDERED_DICT, False)
 
     @tt.gen_test
     def test_threaded_derived_artifact(self):
         executor = futures.ThreadPoolExecutor(1)
-
-        artifact = ThreadedDerivedArtifact(executor, self.derive_ordered_dict,
-                                           self.NUM_ARR, self.NUM_DICT)
-
-        tools.assert_false(artifact.exists())
-
-        value = yield artifact.get()
-
-        tools.assert_equal(value, self.NUM_ORDERED_DICT)
-        tools.assert_true(artifact.exists())
-        tools.assert_true(artifact.ensure())
-
-        # Now call with a slightly different order, calling ensure() before get()
-        artifact = ThreadedDerivedArtifact(executor, self.derive_ordered_dict,
-                                           self.NUM_ARR, self.NUM_DICT)
-
-        tools.assert_false(artifact.exists())
-        ensured = yield artifact.ensure()
-        tools.assert_true(ensured)
-
-        value = yield artifact.get()
-
-        tools.assert_equal(value, self.NUM_ORDERED_DICT)
-        tools.assert_true(artifact.exists())
+        func = lambda: ThreadedDerivedArtifact(executor, self.derive_ordered_dict,
+                                               self.NUM_ARR, self.NUM_DICT, name=self.NAME)
+        yield self.battery(func, self.NUM_ORDERED_DICT, False)
 
     @tt.gen_test
     def test_wrapped_artifact(self):
-        artifact = WrappedArtifact(DerivedArtifact(self.derive_ordered_dict,
-                                                   self.NUM_ARR, self.NUM_DICT))
-
-        tools.assert_false(artifact.exists())
-        value = yield artifact.get()
-        tools.assert_equal(value, self.NUM_ORDERED_DICT)
-        tools.assert_true(artifact.exists())
-        tools.assert_true(artifact.ensure())
+        func = lambda: WrappedArtifact(DerivedArtifact(self.derive_ordered_dict,
+                                                       self.NUM_ARR, self.NUM_DICT),
+                                       name=self.NAME)
+        yield self.battery(func, self.NUM_ORDERED_DICT, False)
 
     @tt.gen_test
     def test_transformed_artifact(self):
         # Try with an ExtantArtifact
-        artifact = TransformedArtifact(ExtantArtifact(self.get_ordered_dict),
-                                       self.transform_reversed_dict)
-
-        tools.assert_true(artifact.exists())
-        tools.assert_true(artifact.ensure())
-
-        value = yield artifact.get()
-
-        tools.assert_equal(value, self.NUM_REVERSED_DICT)
+        func = lambda: TransformedArtifact(ExtantArtifact(self.get_ordered_dict),
+                                           self.transform_reversed_dict, name=self.NAME)
+        yield self.battery(func, self.NUM_REVERSED_DICT, True)
 
         # Try with a DerivedArtifact
-        artifact = TransformedArtifact(DerivedArtifact(self.derive_ordered_dict,
-                                                       self.NUM_ARR, self.NUM_DICT),
-                                       self.transform_reversed_dict)
-
-        tools.assert_false(artifact.exists())
-
-        value = yield artifact.get()
-
-        tools.assert_equal(value, self.NUM_REVERSED_DICT)
-        tools.assert_true(artifact.exists())
-        tools.assert_true(artifact.ensure())
+        func = lambda: TransformedArtifact(DerivedArtifact(self.derive_ordered_dict,
+                                                           self.NUM_ARR, self.NUM_DICT),
+                                       self.transform_reversed_dict, name=self.NAME)
+        yield self.battery(func, self.NUM_REVERSED_DICT, False)
 
     @tt.gen_test
     def test_keyed_artifact(self):
         key = 1
-        artifact = KeyedArtifact(key, DerivedArtifact(self.derive_value, key, self.NUM_DICT))
+        func = lambda: KeyedArtifact(key,
+                                     DerivedArtifact(self.derive_value, key, self.NUM_DICT),
+                                     name=self.NAME)
+        yield self.battery(func, 'one', False)
 
+        artifact = func()
         tools.assert_equal(artifact[0], key)
         tools.assert_equal(artifact[1], artifact)
         tools.assert_equal(artifact['key'], key)
@@ -167,33 +124,24 @@ class ArtifactsTest(tt.AsyncTestCase):
         for (a,b) in zip((key, artifact), iter(artifact)):
             tools.assert_equal(a, b)
 
-        tools.assert_false(artifact.exists())
-
-        value = yield artifact.get()
-
-        tools.assert_equal(value, 'one')
-        tools.assert_true(artifact.exists())
-        tools.assert_true(artifact.ensure())
-
     @tt.gen_test
     def test_keyed_artifact_transform(self):
         key = 1
         artifact = KeyedArtifact(key, DerivedArtifact(self.derive_value, key, self.NUM_DICT))
         artifact2 = artifact.transform(self.derive_key, self.NUM_DICT)
-
         key2 = yield artifact2.get()
         tools.assert_equal(key, key2)
+        tools.assert_is_instance(artifact2, KeyedArtifact)
 
     @tt.gen_test
     def test_keyed_artifact_threaded_transform(self):
         executor = futures.ThreadPoolExecutor(1)
-
         key = 1
         artifact = KeyedArtifact(key, DerivedArtifact(self.derive_value, key, self.NUM_DICT))
         artifact2 = artifact.threaded_transform(executor, self.derive_key, self.NUM_DICT)
-
         key2 = yield artifact2.get()
         tools.assert_equal(key, key2)
+        tools.assert_is_instance(artifact2, KeyedArtifact)
 
     @tt.gen_test
     def test_maybe_artifact(self):
