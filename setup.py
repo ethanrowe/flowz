@@ -11,6 +11,7 @@ setup(
     test_suite = 'nose.collector',
     packages = [
         'flowz',
+        'flowz.channels',
         'flowz.examples',
         'flowz.test',
         'flowz.test.channels',
