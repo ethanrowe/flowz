@@ -114,6 +114,28 @@ class ChannelTest(object):
         yield self.verify_channel_values(chan, values, nesting=True)
 
 
+class TransformingChannelTest(ChannelTest):
+    """
+    Like the baseline `ChannelTest` except implementations provide
+    a value conversion function, when we expect the values emitted by
+    the channel to differ from that of the input channel.
+    """
+    
+    def determine_expected_values(self, values):
+        """
+        Given the input `values` returns the expected emitted values.
+        """
+        return values
+
+    def verify_channel_values(self, chan, values, nesting=False):
+        if not hasattr(self, '_mapped_values'):
+            self._mapped_values = self.determine_expected_values(values)
+            values = self._mapped_values
+        return super(TransformingChannelTest, self).verify_channel_values(
+                chan, values, nesting=nesting)
+
+
+
 class ChannelExceptionTest(object):
     @tt.gen_test
     def test_iteration_and_exception(self):
@@ -480,4 +502,119 @@ class CoGroupStaggeredKeysChannelTest(CoGroupInterleavedChannelTest):
         b = [None for _ in values[:k]]
         b += [(i + k, val) for i, val in enumerate(values[k:])]
         return list(zip(a, b))
+
+
+class WindowChannelTest(ChannelTest, tt.AsyncTestCase):
+    _prepared = None
+
+    def get_sortable_key(self, i):
+        k = mock.Mock(name='SortableKey%d' % i)
+        k.key = i
+        k.__eq__ = lambda m, o: i == getattr(o, 'key', None)
+        k.__ne__ = lambda m, o: i != getattr(o, 'key', None)
+        k.__lt__ = lambda m, o: i < getattr(o, 'key', None)
+        k.__le__ = lambda m, o: i <= getattr(o, 'key', None)
+        k.__gt__ = lambda m, o: i > getattr(o, 'key', None)
+        k.__ge__ = lambda m, o: i >= getattr(o, 'key', None)
+        k.__hash__ = lambda m: hash(i)
+        return k
+
+    def get_sortable_keys(self, count):
+        for i in range(count):
+            yield self.get_sortable_key(i)
+
+    def prepared(self, values):
+        if self._prepared is None:
+            self._prepared = self.prepare_keys_and_values(values)
+        return self._prepared
+
+    def prepare_keys_and_values(self, values):
+        # Each key (but the last) will get emitted with
+        # two items in sequence.
+        # So we'll expect a pair of items per key.
+        keys = list(self.get_sortable_keys(len(values)))
+        keys_by_value = dict((v, [k]) for v, k in zip(values, keys))
+        values_by_key = dict((k, [v]) for k, v in zip(keys, values))
+        for v, k in zip(values[1:], keys):
+            keys_by_value[v].append(k)
+            values_by_key[k].append(v)
+        return keys_by_value, values_by_key
+
+    def determine_expected_values(self, values):
+        _, by_key = self.prepared(values)
+        return [(k, list(by_key[k]))
+                for k in sorted(by_key.keys())]
+
+    def verify_channel_values(self, chan, values, nesting=False):
+        if not hasattr(self, '_original_values'):
+            self._original_values = values
+        if values == self._original_values:
+            values = self.determine_expected_values(values)
+        # If we've already mapped them, we expect `values` to already be
+        # expressed in terms of our expectation.
+        return super(WindowChannelTest, self).verify_channel_values(
+                chan, values, nesting=nesting)
+
+    def get_channel_with_values(self, values):
+        by_val, _ = self.prepared(values)
+        c = channels.IterChannel(iter(values))
+        # Per input value, returns the sequence of associated keys.
+        return channels.WindowChannel(c, lambda v: iter(by_val[v]))
+
+
+class WindowChannelSortingTest(WindowChannelTest):
+    def get_channel_with_values(self, values):
+        by_val, _ = self.prepared(values)
+        c = channels.IterChannel(iter(values))
+        # This reverses the order of keys emitted per item, but we expect
+        # that those window keys will still be emitted in sorted order on
+        # the other side.
+        return channels.WindowChannel(c, lambda v: reversed(by_val[v]))
+
+class WindowChannelNoKeysTest(WindowChannelTest):
+    def prepare_keys_and_values(self, values):
+        key = self.get_sortable_key(0)
+        # Every even value emits key
+        # Every odd value emits no key
+        # The odd values won't be included in anything.
+        # The even values will get one window each because
+        # the key wasn't sustained across consecutive values,
+        # resulting in distinct windows.
+        keys_by_value = dict((v, [key]) for v in values[slice(0, None, 2)])
+        keys_by_value.update(dict((v, []) for v in values[slice(1, None, 2)]))
+        return keys_by_value, key
+
+    def determine_expected_values(self, values):
+        _, key = self.prepared(values)
+        return [(key, [val]) for val in values[slice(0, None, 2)]]
+
+
+class WindowChannelCommonValueTest(WindowChannelTest):
+    def prepare_keys_and_values(self, values):
+        # One key will be common to everything, while
+        # other keys will be per-item.
+        keys = list(self.get_sortable_keys(len(values) + 1))
+        # We expect the last guy to be associated with all of 'em.
+        keys_by_value = dict((v, [k, keys[-1]]) for v, k in zip(values, keys))
+        values_by_key = dict((k, [v]) for k, v in zip(keys, values))
+        # And again, the last key is associated with all values.
+        values_by_key[keys[-1]] = list(values)
+        return keys_by_value, values_by_key
+
+class WindowChannelCommonValueEarlySortTest(WindowChannelTest):
+    def prepare_keys_and_values(self, values):
+        # The earliest key will be common to everything, while others
+        # are per-item.
+        keys = list(self.get_sortable_keys(len(values) + 1))
+        keys_by_value = dict((v, [keys[0], k]) for v, k in zip(values, keys[1:]))
+        values_by_key = dict((k, [v]) for k, v in zip(keys[1:], values))
+        values_by_key[keys[0]] = list(values)
+        return keys_by_value, values_by_key
+
+    def determine_expected_values(self, values):
+        _, values_by_key = self.prepared(values)
+        keys = list(sorted(values_by_key.keys()))
+        key = keys.pop(0)
+        keys.insert(-1, key)
+        return [(k, values_by_key[k]) for k in keys]
 

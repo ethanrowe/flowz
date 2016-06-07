@@ -405,6 +405,149 @@ class FlatMapChannel(MapChannel):
             head.set_exception(e)
 
 
+class Windower(object):
+    def __init__(self):
+        self.members = {}
+        self.keys = []
+
+    def window(self, keys, value):
+        mem = self.members
+        active = self.keys
+
+        keys = iter(sorted(keys))
+        i = 0
+
+        try:
+            while True:
+                key = next(keys)
+                while active[i] < key:
+                    # Actives are sorted, keys are sorted; any active that is
+                    # less than key must be emitted and cleared out.
+                    k = active.pop(i)
+                    yield k, mem.pop(k)
+
+                if active[i] == key:
+                    # The key is present in new list, so add item to members
+                    # and keep the key active.
+                    mem[key].append(value)
+                    i += 1
+                else:
+                    # The key is new to the list, so add it.
+                    active.insert(i, key)
+                    mem[key] = [value]
+                    i += 1
+
+        except IndexError:
+            # This occurs if there's nothing left in active keys.
+            # Anything remaining in new keys gets collected.
+            try:
+                while True:
+                    active.append(key)
+                    mem[key] = [value]
+                    key = next(keys)
+            except StopIteration:
+                # All done
+                pass
+
+        except StopIteration:
+            # This occurs if we've used up all the input keys.  Anything
+            # remaining is no longer active and should be emitted.
+            while i < len(active):
+                k = active.pop(i)
+                yield k, mem.pop(k)
+
+
+    def tail(self):
+        active = self.keys
+        mem = self.members
+        while active:
+            k = active.pop(0)
+            yield k, mem.pop(k)
+            
+
+class WindowChannel(FlatMapChannel):
+    """
+    Groups input channel items into windows by key
+
+    Given some input :class:`flowz.channel.core.Channel` and a
+    :func:`transform` function, groups values from the input channel
+    into windows based on the window keys returned by `transform`.
+
+    Parameters:
+        channel (:class:`flowz.channel.core.Channel`): the input channel
+            from which input values are pulled
+
+        function (callable): a function that is called per input channel
+            item (with that item as the sole argument), which should return
+            an iterable collection of sortable, hashable window keys.
+
+    Values from the `channel` will be gathered into windows according to
+    the keys emitted per value by the `transform`; per value, if a
+    previously-produced window key is no longer present, that window key
+    and all its gathered values will be released by the ``WindowChannel``,
+    as a ``(windowkey, valueslist)`` tuple.  Windows are released in
+    sorted key order, and the values within each ``valueslist`` are in
+    input-channel order (the order in which they were emitted by the input
+    channel).
+
+    An example::
+        from __future__ import print_function
+
+        # tuples as window keys, where the first item of the tuple indicates
+        def groups(i):
+            yield 'by2:%d' % (i // 2)
+            yield 'by3:%d' % (i // 3)
+
+        inputchan = IterChannel(range(5))
+        windows = WindowChannel(inputchan, groups)
+
+        Flo([windows.map(print)]).run()
+        # Prints:
+        # ('by2:0', [0, 1])
+        # ('by3:0', [0, 1, 2])
+        # ('by2:1', [2, 3])
+        # ('by2:2', [4])
+        # ('by3:1', [3, 4])
+
+    The scope of a window key is bound to the sequence of items on the input
+    channel; a window key and its associated values are emitted as soon as
+    an item is encountered that does not produce that window key.  Thus, you
+    may use a windowing scheme that repeats window keys across the domain of
+    your input channel, but if those repeats are not sequential, you will
+    get multiple windows with the same key.
+    """
+
+    def __init__(self, channel, transform):
+        self.windower = self.get_windower()
+        super(WindowChannel, self).__init__(channel, transform)
+
+
+    @classmethod
+    def get_windower(cls):
+        return Windower()
+
+
+    @gen.coroutine
+    def __next_item__(self):
+        try:
+            value = yield self.__channel__.next()
+            keys = self.__transform__(value)
+            raise gen.Return(self.windower.window(keys, value))
+        except ChannelDone:
+            # We have to deal with the windower's tail after
+            # the input channel is done.
+            win = self.windower
+            # If it's none, we've already been here before; this
+            # channel is done (tail has been released)
+            if win is None:
+                raise ChannelDone("Channel is done")
+            # If here, this is the first time the input channel through
+            # the ChannelDone, so we release the windower's tail and
+            # clear the windower from the channel.
+            self.windower = None
+            raise gen.Return(win.tail())
+
+
 class FilterChannel(FlatMapChannel):
     """
     Filters a source channel, passing through items that pass a predicate test.
