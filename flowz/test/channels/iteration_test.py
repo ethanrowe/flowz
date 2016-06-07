@@ -618,3 +618,43 @@ class WindowChannelCommonValueEarlySortTest(WindowChannelTest):
         keys.insert(-1, key)
         return [(k, values_by_key[k]) for k in keys]
 
+class GroupChannelTest(WindowChannelTest):
+    def prepare_keys_and_values(self, values):
+        # Must return tuple of:
+        # - a dict mapping value to associated group by
+        # - the actual list of expected channel values.
+        # For the base case, we'll just do simplistic windowing
+        # based on buckets of two.
+        key_by_value = dict(
+                (v, i // 2) for i, v in enumerate(values))
+        expected_vals = [
+                (i // 2, values[i:i+2])
+                for i in range(0, len(values), 2)]
+        return key_by_value, expected_vals
+
+    def determine_expected_values(self, values):
+        _, expect_vals = self.prepared(values)
+        return expect_vals
+
+    def get_channel_with_values(self, values):
+        by_val, _ = self.prepared(values)
+        c = channels.IterChannel(iter(values))
+        # Per input value, returns the single associated key
+        return channels.GroupChannel(c, lambda v: by_val[v])
+
+
+class GroupChannelRepeatKeysTest(GroupChannelTest):
+    def prepare_keys_and_values(self, values):
+        # Group using mod 2, so we get repeat keys.
+        key_by_value = dict(
+                (v, i % 2) for i, v in enumerate(values))
+        vals = [(i % 2, [v]) for i, v in enumerate(values)]
+        return key_by_value, vals
+
+
+class GroupChannelOneKeyTest(GroupChannelTest):
+    def prepare_keys_and_values(self, values):
+        key = mock.Mock(name='AMockKey')
+        key_by_value = dict((v, key) for v in values)
+        return key_by_value, [(key, list(values))]
+

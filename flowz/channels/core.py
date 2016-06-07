@@ -548,6 +548,23 @@ class WindowChannel(FlatMapChannel):
             raise gen.Return(win.tail())
 
 
+class GroupChannel(WindowChannel):
+    """
+    Group items from an input channel based on keys from a function.
+
+    Like :func:`itertools.groupby` from the standard library, but for channels;
+    also like :class:`WindowChannel`, but the ``transform`` function should
+    return a single hashable key, rather than a sequence of window keys.
+    """
+    def __init__(self, channel, transform):
+        super(GroupChannel, self).__init__(
+                channel, self.wrap_transformer(transform))
+
+    @staticmethod
+    def wrap_transformer(fn):
+        return lambda val: (fn(val),)
+
+
 class FilterChannel(FlatMapChannel):
     """
     Filters a source channel, passing through items that pass a predicate test.
