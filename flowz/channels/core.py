@@ -548,6 +548,30 @@ class WindowChannel(FlatMapChannel):
             raise gen.Return(win.tail())
 
 
+class Grouper(object):
+    keyed = False
+
+    def window(self, key, value):
+        if self.keyed:
+            if self.last_key == key:
+                # Same key, so just accumulate and move on.
+                self.values.append(value)
+            else:
+                # Different key, so release previous and start new.
+                yield self.last_key, self.values
+                self.last_key, self.values = key, [value]
+        else:
+            # First pass through
+            self.keyed = True
+            self.last_key, self.values = key, [value]
+
+
+    def tail(self):
+        if self.keyed:
+            # If anything remains, send it off.
+            yield self.last_key, self.values
+
+
 class GroupChannel(WindowChannel):
     """
     Group items from an input channel based on keys from a function.
@@ -556,13 +580,10 @@ class GroupChannel(WindowChannel):
     also like :class:`WindowChannel`, but the ``transform`` function should
     return a single hashable key, rather than a sequence of window keys.
     """
-    def __init__(self, channel, transform):
-        super(GroupChannel, self).__init__(
-                channel, self.wrap_transformer(transform))
 
-    @staticmethod
-    def wrap_transformer(fn):
-        return lambda val: (fn(val),)
+    @classmethod
+    def get_windower(cls):
+        return Grouper()
 
 
 class FilterChannel(FlatMapChannel):
