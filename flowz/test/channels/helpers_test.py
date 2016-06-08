@@ -98,6 +98,20 @@ class TestChannelHelpers(object):
             tools.assert_equal(val, func({idx: val}))
 
 
+    def test_windowby_method(self):
+        func = mock.Mock(name='WindowKeyingFunction')
+        with mock.patch.object(chn, 'WindowChannel') as wc:
+            self.verify_delegation(self.channel.windowby(func),
+                    wc,
+                    self.channel, func)
+
+    def test_groupby_method(self):
+        func = mock.Mock(name='GroupKeyingFunction')
+        with mock.patch.object(chn, 'GroupChannel') as gc:
+            self.verify_delegation(self.channel.groupby(func),
+                    gc,
+                    self.channel, func)
+
 
 class TestTeeChannelHelpers(TestChannelHelpers):
     CLASS = chn.TeeChannel
@@ -157,4 +171,12 @@ class TestFlatMapChannelHelpers(TestChannelHelpers):
 
 class TestFilterChannelHelpers(TestMapChannelHelpers):
     CLASS = chn.FilterChannel
+
+
+class TestWindowChannelHelpers(TestMapChannelHelpers):
+    CLASS = chn.WindowChannel
+
+
+class TestGroupChannelHelpers(TestMapChannelHelpers):
+    CLASS = chn.GroupChannel
 
