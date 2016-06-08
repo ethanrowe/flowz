@@ -282,7 +282,7 @@ class Channel(object):
         return MapChannel(self, lambda item: item[key_or_slice])
 
 
-    def windowby(self, keyfunc):
+    def windowby(self, keyfunc=None):
         """
         Window the items according to `keyfunc`.
 
@@ -293,10 +293,10 @@ class Channel(object):
 
         See the `WindowChannel` for more.
         """
-        return WindowChannel(self, keyfunc)
+        return WindowChannel(self, transform=keyfunc)
 
 
-    def groupby(self, keyfunc):
+    def groupby(self, keyfunc=None):
         """
         Group items according to `keyfunc`.
 
@@ -307,7 +307,7 @@ class Channel(object):
 
         See the `GroupChannel` for more.
         """
-        return GroupChannel(self, keyfunc)
+        return GroupChannel(self, transform=keyfunc)
 
 
 class ReadChannel(Channel):
@@ -505,9 +505,12 @@ class WindowChannel(FlatMapChannel):
         channel (:class:`flowz.channel.core.Channel`): the input channel
             from which input values are pulled
 
-        function (callable): a function that is called per input channel
-            item (with that item as the sole argument), which should return
-            an iterable collection of sortable, hashable window keys.
+        function (callable): [OPTIONAL] a function that is called per input
+            channel item (with that item as the sole argument), which should
+            return an iterable collection of sortable, hashable window keys.
+
+    When no function is given, each item is assumed to be a sequence with
+    the keys in the first position (``item[0]``).
 
     Values from the `channel` will be gathered into windows according to
     the keys emitted per value by the `transform`; per value, if a
@@ -545,9 +548,19 @@ class WindowChannel(FlatMapChannel):
     get multiple windows with the same key.
     """
 
-    def __init__(self, channel, transform):
+    def __init__(self, channel, transform=None):
         self.windower = self.get_windower()
+        if transform is None:
+            transform = self.default_transform
         super(WindowChannel, self).__init__(channel, transform)
+
+
+    @staticmethod
+    def default_transform(value):
+        """
+        Assumes ``value`` has window keys in its first position (value[0])
+        """
+        return value[0]
 
 
     @classmethod
@@ -607,6 +620,10 @@ class GroupChannel(WindowChannel):
     Like :func:`itertools.groupby` from the standard library, but for channels;
     also like :class:`WindowChannel`, but the ``transform`` function should
     return a single hashable key, rather than a sequence of window keys.
+
+    If no ``transform`` function is given, the default behavior is to treat
+    each item as a sequence, with the desired key in first position
+    (``item[0]``).
     """
 
     @classmethod

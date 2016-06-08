@@ -561,6 +561,24 @@ class WindowChannelTest(ChannelTest, tt.AsyncTestCase):
         # Per input value, returns the sequence of associated keys.
         return channels.WindowChannel(c, lambda v: iter(by_val[v]))
 
+class WindowWithNoFunc(object):
+    def item_getter(self, keys):
+        return lambda _, i: (list(keys),)[i]
+
+    def get_channel_with_values(self, values):
+        # In this case, no transform function is given.
+        # The default behavior should be to attempt to
+        # take the first positional element of each value.
+        by_val, _ = self.prepared(values)
+        for val in values:
+            val.__getitem__ = self.item_getter(by_val[val])
+        c = channels.IterChannel(iter(values))
+        return channels.WindowChannel(c)
+
+
+class WindowChannelDefaultTransformTest(WindowWithNoFunc, WindowChannelTest):
+    pass
+
 
 class WindowChannelSortingTest(WindowChannelTest):
     def get_channel_with_values(self, values):
@@ -570,6 +588,15 @@ class WindowChannelSortingTest(WindowChannelTest):
         # that those window keys will still be emitted in sorted order on
         # the other side.
         return channels.WindowChannel(c, lambda v: reversed(by_val[v]))
+
+
+class WindowChannelSortingDefaultTransformTest(
+        WindowWithNoFunc, WindowChannelSortingTest):
+    def item_getter(self, keys):
+        return super(
+                WindowChannelSortingDefaultTransformTest, self).item_getter(
+                        list(reversed(keys)))
+
 
 class WindowChannelNoKeysTest(WindowChannelTest):
     def prepare_keys_and_values(self, values):
@@ -589,6 +616,10 @@ class WindowChannelNoKeysTest(WindowChannelTest):
         return [(key, [val]) for val in values[slice(0, None, 2)]]
 
 
+class WindowChannelNoKeysDefaultTransformTest(
+        WindowWithNoFunc, WindowChannelNoKeysTest):
+    pass
+
 class WindowChannelCommonValueTest(WindowChannelTest):
     def prepare_keys_and_values(self, values):
         # One key will be common to everything, while
@@ -600,6 +631,10 @@ class WindowChannelCommonValueTest(WindowChannelTest):
         # And again, the last key is associated with all values.
         values_by_key[keys[-1]] = list(values)
         return keys_by_value, values_by_key
+
+class WindowChannelCommonValueDefaultTransformTest(
+        WindowWithNoFunc, WindowChannelCommonValueTest):
+    pass
 
 class WindowChannelCommonValueEarlySortTest(WindowChannelTest):
     def prepare_keys_and_values(self, values):
@@ -617,6 +652,10 @@ class WindowChannelCommonValueEarlySortTest(WindowChannelTest):
         key = keys.pop(0)
         keys.insert(-1, key)
         return [(k, values_by_key[k]) for k in keys]
+
+class WindowChannelCommonValueEarlySortNoTransformTest(
+        WindowWithNoFunc, WindowChannelCommonValueEarlySortTest):
+    pass
 
 class GroupChannelTest(WindowChannelTest):
     def prepare_keys_and_values(self, values):
@@ -641,6 +680,22 @@ class GroupChannelTest(WindowChannelTest):
         c = channels.IterChannel(iter(values))
         # Per input value, returns the single associated key
         return channels.GroupChannel(c, lambda v: by_val[v])
+
+
+class GroupChannelDefaultTransformTest(GroupChannelTest):
+    def item_getter(self, item):
+        return lambda _, i: (item,)[i]
+
+    def get_channel_with_values(self, values):
+        # In this case, no transform function is given; the
+        # default behavior is to assume the grouping key is
+        # the first positional element of each value (val[0]).
+        by_val, _ = self.prepared(values)
+        for val in values:
+            val.__getitem__ = self.item_getter(by_val[val])
+        c = channels.IterChannel(iter(values))
+        # No transform functon.
+        return channels.GroupChannel(c)
 
 
 class GroupChannelRepeatKeysTest(GroupChannelTest):
