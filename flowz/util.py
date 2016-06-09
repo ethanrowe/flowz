@@ -118,7 +118,49 @@ class LastResult(object):
         return r
 
 
+def merge_keyed_channels(first_chan, other_chan, *other_chans):
+    """
+    Reduce two or more channels of (key, value) pairs to single channel.
+
+    Given two or more channels where each channel's items are structured as
+    (key, value) pairs, and all channels use equivalent keys and an equivalent
+    sort order, cogroups the channels and for each cogrouping combination
+    passes along the "best" k/v pair, where "best" is the rightmost pair
+    (according to channel position in the inputs) with the highest key.
+    """
+    def pick_rightmost(pairs):
+        best = None
+        pairs = (pair for pair in pairs if pair is not None)
+        for pair in pairs:
+            if best is None:
+                best = pair
+            elif pair[0] >= best[0]:
+                best = pair
+        return best
+
+    return first_chan.cogroup(other_chan, *other_chans).map(pick_rightmost)
+
+
 def incremental_assembly(source, dest, assembler):
+    """
+    Build a channel where each succeeding entry is given the context of the prior entry
+    to assemble itself.
+
+    This is generally used to construct channels where each entry includes everything
+    in the prior entry *plus* one more item.
+
+    The `source` channel provides the data that will make its way into the resulting channel.
+
+    The `dest` channel presents results that have been captured from prior incremental
+    assembly.
+
+    Thus, when the two channels are first cogrouped with each other, the entry from the `dest`
+    channel is chosen when both are present for the same key, and it is passed through
+    untouched.  When a key is encountered that does not have a `dest` entry (generally after
+    all of the keys in dest are exhausted), the `source` entry is assembled using the
+    `assembler` function, being passed the source value and the prior value from the
+    output channel.
+    """
     passthru = lambda curr, last: curr
 
     # Source chan becomes pair where value is assembler, item pair.
@@ -133,39 +175,10 @@ def incremental_assembly(source, dest, assembler):
     return out.map(LastResult(lambda (k, (v, fn)), last: fn(v, last)))
 
 
-def channel_join(a, b):
+def channel_inner_join(a, b):
+    """
+    Cogroup two channels and filter the result to only pass through those entries that
+    have equivalent keys, as in a relational inner join.
+    """
     out = a.cogroup(b)
     return out.filter(lambda (x, y): (x is not None and y is not None and x[0] == y[0]))
-
-
-def _merge_picker(pairs):
-    best = None
-    pairs = (pair for pair in pairs if pair is not None)
-    for pair in pairs:
-        if best is None:
-            best = pair
-        elif pair[0] >= best[0]:
-            best = pair
-    return best
-
-
-def merge_keyed_channels(first_chan, other_chan, *other_chans):
-    """
-    Reduce two or more channels of (key, value) pairs to single channel.
-
-    Given two or more channels where each channel's items are structured as
-    (key, value) pairs, and all channels use equivalent keys and an equivalent
-    sort order, cogroups the channels and for each cogrouping combination
-    passes along the "best" k/v pair, where "best" is the rightmost pair
-    (according to channel position in the inputs) with the highest key.
-    """
-    return first_chan.cogroup(other_chan, *other_chans).map(_merge_picker)
-
-
-def channel_puller(chan, mode='ensure'):
-    # Maybe a temporal item (key/value pair)
-    chan = chan.map(lambda x: getattr(x, 'value', x))
-    # Maybe an artifact.
-    chan = chan.map(lambda y: getattr(y, mode)() if hasattr(y, mode) else y)
-    # Wait for em.
-    return chan.each_ready().map(print)
