@@ -214,7 +214,10 @@ class WrappedArtifact(AbstractArtifact):
         return self.value.ensure()
 
     def __getattr__(self, attr):
-        return getattr(self.value, attr)
+        if hasattr(self, 'value'):
+            return getattr(self.value, attr)
+        else:
+            raise AttributeError("No such attribute: %r; value not yet initialized" % attr)
 
     def __getitem__(self, item):
         try:

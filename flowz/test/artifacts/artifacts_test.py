@@ -116,6 +116,24 @@ class ArtifactsTest(tt.AsyncTestCase):
         yield self.battery(maker, self.NUM_ORDERED_DICT, False)
 
     @tt.gen_test
+    def test_wrapped_artifact_getattr(self):
+        artifact = WrappedArtifact(DerivedArtifact(self.derive_ordered_dict,
+                                                   self.NUM_ARR, self.NUM_DICT),
+                                   name=self.NAME)
+
+        # in a normal situation, getting attributes should work fine, passing the call
+        # onto the underlying value...
+        tools.assert_equal(self.derive_ordered_dict, getattr(artifact, 'deriver'))
+        # ...and throwing AttributeError if it didn't have the attribute
+        tools.assert_raises(AttributeError, getattr, artifact, 'phamble')
+
+        # If you had not yet set a value attribute on the artifact, though...
+        delattr(artifact, 'value')
+        # ...this used to infinitely recurse until Python complained.
+        # But now it should return a proper AttributeError
+        tools.assert_raises(AttributeError, getattr, artifact, 'deriver')
+
+    @tt.gen_test
     def test_transformed_artifact(self):
         # Try with an ExtantArtifact
         maker = lambda: TransformedArtifact(ExtantArtifact(self.get_ordered_dict),
