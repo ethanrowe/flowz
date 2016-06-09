@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name = 'flowz',
-    version = '0.1.0',
+    version = '0.2.0',
     description = 'Async I/O - oriented dependency programming framework',
     url = 'https://github.com/ethanrowe/flowz',
     author = 'Ethan Rowe',
@@ -14,6 +14,7 @@ setup(
         'flowz.channels',
         'flowz.examples',
         'flowz.test',
+        'flowz.test.artifacts',
         'flowz.test.channels',
         'flowz.test.util',
         ],
