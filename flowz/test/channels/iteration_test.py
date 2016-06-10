@@ -545,6 +545,7 @@ class WindowChannelTest(ChannelTest, tt.AsyncTestCase):
         return [(k, list(by_key[k]))
                 for k in sorted(by_key.keys())]
 
+    @gen.coroutine
     def verify_channel_values(self, chan, values, nesting=False):
         if not hasattr(self, '_original_values'):
             self._original_values = values
@@ -552,14 +553,56 @@ class WindowChannelTest(ChannelTest, tt.AsyncTestCase):
             values = self.determine_expected_values(values)
         # If we've already mapped them, we expect `values` to already be
         # expressed in terms of our expectation.
-        return super(WindowChannelTest, self).verify_channel_values(
+        yield super(WindowChannelTest, self).verify_channel_values(
                 chan, values, nesting=nesting)
+
 
     def get_channel_with_values(self, values):
         by_val, _ = self.prepared(values)
         c = channels.IterChannel(iter(values))
         # Per input value, returns the sequence of associated keys.
         return channels.WindowChannel(c, lambda v: iter(by_val[v]))
+
+
+class WindowChannelDuplicateKeysTest(WindowChannelTest):
+    def get_channel_with_values(self, values):
+        by_val, _ = self.prepared(values)
+        c = channels.IterChannel(iter(values))
+        # Per input value, we double the sequence of associated keys.
+        return channels.WindowChannel(c, lambda v: iter(by_val[v] + by_val[v]))
+
+
+class WindowChannelNumericKeysTest(WindowChannelTest):
+    def alt_values(self):
+        return list(range(5))
+
+    def get_channel_with_values(self, values):
+        return super(WindowChannelNumericKeysTest, self).get_channel_with_values(
+                self.alt_values())
+
+    def prepare_keys_and_values(self, values):
+        # We emit div 2 and div 3 as keys per item.
+        # This means we'll get some messy duplicates.
+        keys_by_value = dict(
+                (i, [i // x for x in (2, 3)])
+                for i in self.alt_values())
+        # Table of values to emitted keys,
+        # with arrows indicating the point at which keys are emitted.
+        # We dedup keys per value, so parens show the deduped keys
+        # 0: 0, 0 (0)
+        # 1: 0, 0 (0)
+        # 2: 1, 0 (1, 0)
+        # 3: 1, 1 (1) -> 0: 0, 1, 2
+        # 4: 2, 1 (2, 1)
+        #  -> 1: 2, 3, 4
+        #  -> 2: 4
+        vals_by_key = {
+                0: [0, 1, 2],
+                1: [2, 3, 4],
+                2: [4]}
+        return keys_by_value, vals_by_key
+
+
 
 class WindowWithNoFunc(object):
     def item_getter(self, keys):

@@ -442,7 +442,8 @@ class Windower(object):
         mem = self.members
         active = self.keys
 
-        keys = iter(sorted(keys))
+        # Unique keys per item
+        keys = iter(sorted(set(keys)))
         i = 0
 
         try:
