@@ -282,6 +282,34 @@ class Channel(object):
         return MapChannel(self, lambda item: item[key_or_slice])
 
 
+    def windowby(self, keyfunc=None):
+        """
+        Window the items according to `keyfunc`.
+
+        Assuming `keyfunc` is a callable that, given as argument
+        any item within `self`, returns a sequence of sortable, hashable
+        keys, applies `keyfunc` to each item and organizes items according
+        to the window keys emitted.
+
+        See the `WindowChannel` for more.
+        """
+        return WindowChannel(self, transform=keyfunc)
+
+
+    def groupby(self, keyfunc=None):
+        """
+        Group items according to `keyfunc`.
+
+        Assuming `keyfunc` is a calalble that, given as argument any
+        item within `self`, returns grouping key, applies `keyfunc` to
+        each item and organizes items into groups by grouping keys
+        emitted.
+
+        See the `GroupChannel` for more.
+        """
+        return GroupChannel(self, transform=keyfunc)
+
+
 class ReadChannel(Channel):
     """
     Wraps any channel with a read-only interface.
@@ -403,6 +431,205 @@ class FlatMapChannel(MapChannel):
             head.set_exception(ChannelDone("Channel is done"))
         except Exception as e:
             head.set_exception(e)
+
+
+class Windower(object):
+    def __init__(self):
+        self.members = {}
+        self.keys = []
+
+    def window(self, keys, value):
+        mem = self.members
+        active = self.keys
+
+        # Unique keys per item
+        keys = iter(sorted(set(keys)))
+        i = 0
+
+        try:
+            while True:
+                key = next(keys)
+                while active[i] < key:
+                    # Actives are sorted, keys are sorted; any active that is
+                    # less than key must be emitted and cleared out.
+                    k = active.pop(i)
+                    yield k, mem.pop(k)
+
+                if active[i] == key:
+                    # The key is present in new list, so add item to members
+                    # and keep the key active.
+                    mem[key].append(value)
+                    i += 1
+                else:
+                    # The key is new to the list, so add it.
+                    active.insert(i, key)
+                    mem[key] = [value]
+                    i += 1
+
+        except IndexError:
+            # This occurs if there's nothing left in active keys.
+            # Anything remaining in new keys gets collected.
+            try:
+                while True:
+                    active.append(key)
+                    mem[key] = [value]
+                    key = next(keys)
+            except StopIteration:
+                # All done
+                pass
+
+        except StopIteration:
+            # This occurs if we've used up all the input keys.  Anything
+            # remaining is no longer active and should be emitted.
+            while i < len(active):
+                k = active.pop(i)
+                yield k, mem.pop(k)
+
+
+    def tail(self):
+        active = self.keys
+        mem = self.members
+        while active:
+            k = active.pop(0)
+            yield k, mem.pop(k)
+            
+
+class WindowChannel(FlatMapChannel):
+    """
+    Groups input channel items into windows by key
+
+    Given some input :class:`flowz.channel.core.Channel` and a
+    :func:`transform` function, groups values from the input channel
+    into windows based on the window keys returned by `transform`.
+
+    Parameters:
+        channel (:class:`flowz.channel.core.Channel`): the input channel
+            from which input values are pulled
+
+        function (callable): [OPTIONAL] a function that is called per input
+            channel item (with that item as the sole argument), which should
+            return an iterable collection of sortable, hashable window keys.
+
+    When no function is given, each item is assumed to be a sequence with
+    the keys in the first position (``item[0]``).
+
+    Values from the `channel` will be gathered into windows according to
+    the keys emitted per value by the `transform`; per value, if a
+    previously-produced window key is no longer present, that window key
+    and all its gathered values will be released by the ``WindowChannel``,
+    as a ``(windowkey, valueslist)`` tuple.  Windows are released in
+    sorted key order, and the values within each ``valueslist`` are in
+    input-channel order (the order in which they were emitted by the input
+    channel).
+
+    An example::
+        from __future__ import print_function
+
+        # tuples as window keys, where the first item of the tuple indicates
+        def groups(i):
+            yield 'by2:%d' % (i // 2)
+            yield 'by3:%d' % (i // 3)
+
+        inputchan = IterChannel(range(5))
+        windows = WindowChannel(inputchan, groups)
+
+        Flo([windows.map(print)]).run()
+        # Prints:
+        # ('by2:0', [0, 1])
+        # ('by3:0', [0, 1, 2])
+        # ('by2:1', [2, 3])
+        # ('by2:2', [4])
+        # ('by3:1', [3, 4])
+
+    The scope of a window key is bound to the sequence of items on the input
+    channel; a window key and its associated values are emitted as soon as
+    an item is encountered that does not produce that window key.  Thus, you
+    may use a windowing scheme that repeats window keys across the domain of
+    your input channel, but if those repeats are not sequential, you will
+    get multiple windows with the same key.
+    """
+
+    def __init__(self, channel, transform=None):
+        self.windower = self.get_windower()
+        if transform is None:
+            transform = self.default_transform
+        super(WindowChannel, self).__init__(channel, transform)
+
+
+    @staticmethod
+    def default_transform(value):
+        """
+        Assumes ``value`` has window keys in its first position (value[0])
+        """
+        return value[0]
+
+
+    @classmethod
+    def get_windower(cls):
+        return Windower()
+
+
+    @gen.coroutine
+    def __next_item__(self):
+        try:
+            value = yield self.__channel__.next()
+            keys = self.__transform__(value)
+            raise gen.Return(self.windower.window(keys, value))
+        except ChannelDone:
+            # We have to deal with the windower's tail after
+            # the input channel is done.
+            win = self.windower
+            # If it's none, we've already been here before; this
+            # channel is done (tail has been released)
+            if win is None:
+                raise ChannelDone("Channel is done")
+            # If here, this is the first time the input channel through
+            # the ChannelDone, so we release the windower's tail and
+            # clear the windower from the channel.
+            self.windower = None
+            raise gen.Return(win.tail())
+
+
+class Grouper(object):
+    keyed = False
+
+    def window(self, key, value):
+        if self.keyed:
+            if self.last_key == key:
+                # Same key, so just accumulate and move on.
+                self.values.append(value)
+            else:
+                # Different key, so release previous and start new.
+                yield self.last_key, self.values
+                self.last_key, self.values = key, [value]
+        else:
+            # First pass through
+            self.keyed = True
+            self.last_key, self.values = key, [value]
+
+
+    def tail(self):
+        if self.keyed:
+            # If anything remains, send it off.
+            yield self.last_key, self.values
+
+
+class GroupChannel(WindowChannel):
+    """
+    Group items from an input channel based on keys from a function.
+
+    Like :func:`itertools.groupby` from the standard library, but for channels;
+    also like :class:`WindowChannel`, but the ``transform`` function should
+    return a single hashable key, rather than a sequence of window keys.
+
+    If no ``transform`` function is given, the default behavior is to treat
+    each item as a sequence, with the desired key in first position
+    (``item[0]``).
+    """
+
+    @classmethod
+    def get_windower(cls):
+        return Grouper()
 
 
 class FilterChannel(FlatMapChannel):
