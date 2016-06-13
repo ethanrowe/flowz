@@ -310,6 +310,16 @@ class Channel(object):
         return GroupChannel(self, transform=keyfunc)
 
 
+    def chain(self, *channels):
+        """
+        Chain channels together into a single channel.
+
+        Returns a :class:`ChainChannel` of the original channel chained with
+        any number of given ``channels``.  See :class:`ChainChannel` for more.
+        """
+        return ChainChannel([self] + list(channels))
+
+
 class ReadChannel(Channel):
     """
     Wraps any channel with a read-only interface.
