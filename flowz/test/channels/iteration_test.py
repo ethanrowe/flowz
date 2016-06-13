@@ -756,3 +756,52 @@ class GroupChannelOneKeyTest(GroupChannelTest):
         key_by_value = dict((v, key) for v in values)
         return key_by_value, [(key, list(values))]
 
+
+class ChainChannelTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
+    def split_values(self, values):
+        # Two channels together.
+        split = (len(values) // 2) + 1
+        va, vb = values[:split], values[split:]
+        return va, vb
+
+    def get_channel_with_values(self, values):
+        chns = [channels.IterChannel(vals)
+                for vals in self.split_values(values)]
+        return channels.ChainChannel(chns)
+
+    def get_channel_values_before_error(self, values):
+        def valgen(vals):
+            for v in vals:
+                yield v
+            raise TestException("Boom!")
+
+        splits = list(self.split_values(values))
+        splits[-1] = valgen(splits[-1])
+        chans = [channels.IterChannel(vls)
+                 for vls in splits]
+        return channels.ChainChannel(chans)
+
+
+class ChainChannelWithEmptiesTest(ChainChannelTest):
+    def split_values(self, values):
+        # An empty channel between every other one-channel value
+        for value in values:
+            yield [value]
+            yield ()
+
+
+class ChainChannelRearLoadedTest(ChainChannelTest):
+    def split_values(self, values):
+        # All the values are in the final of three channels.
+        yield ()
+        yield ()
+        yield values
+
+class ChainChannelFrontLoadedTest(ChainChannelTest):
+    def split_values(self, values):
+        # All the values are in the first of three channels.
+        yield values
+        yield ()
+        yield ()
+
+
