@@ -13,11 +13,11 @@ class TestChannelHelpers(object):
         return c
 
 
-    def verify_delegation(self, result, mock_cls, *args):
+    def verify_delegation(self, result, mock_cls, *args, **kw):
         # The result is of the proper class
         tools.assert_equal(mock_cls.return_value, result)
         # The class was invoked with expected args.
-        mock_cls.assert_called_once_with(*args)
+        mock_cls.assert_called_once_with(*args, **kw)
 
 
     def test_tee_method(self):
@@ -98,6 +98,33 @@ class TestChannelHelpers(object):
             tools.assert_equal(val, func({idx: val}))
 
 
+    def test_windowby_method(self):
+        func = mock.Mock(name='WindowKeyingFunction')
+        with mock.patch.object(chn, 'WindowChannel') as wc:
+            self.verify_delegation(self.channel.windowby(func),
+                    wc,
+                    self.channel, transform=func)
+
+
+    def test_windowby_nofunc_method(self):
+        with mock.patch.object(chn, 'WindowChannel') as wc:
+            self.verify_delegation(self.channel.windowby(),
+                    wc,
+                    self.channel, transform=None)
+
+    def test_groupby_method(self):
+        func = mock.Mock(name='GroupKeyingFunction')
+        with mock.patch.object(chn, 'GroupChannel') as gc:
+            self.verify_delegation(self.channel.groupby(func),
+                    gc,
+                    self.channel, transform=func)
+
+    def test_groupby_nofunc_method(self):
+        with mock.patch.object(chn, 'GroupChannel') as gc:
+            self.verify_delegation(self.channel.groupby(),
+                    gc,
+                    self.channel, transform=None)
+
 
 class TestTeeChannelHelpers(TestChannelHelpers):
     CLASS = chn.TeeChannel
@@ -157,4 +184,12 @@ class TestFlatMapChannelHelpers(TestChannelHelpers):
 
 class TestFilterChannelHelpers(TestMapChannelHelpers):
     CLASS = chn.FilterChannel
+
+
+class TestWindowChannelHelpers(TestMapChannelHelpers):
+    CLASS = chn.WindowChannel
+
+
+class TestGroupChannelHelpers(TestMapChannelHelpers):
+    CLASS = chn.GroupChannel
 
