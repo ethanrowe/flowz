@@ -310,6 +310,19 @@ class Channel(object):
         return GroupChannel(self, transform=keyfunc)
 
 
+    def observe(self, observer):
+        """
+        Observe items on a channel for side effects
+
+        Given a callable `observer`, passes each message on the channel
+        to `observer` before passing the message along.  Allows observation
+        of channel contents for purposes like logging, metrics, alerting,
+        etc.
+
+        See the `ObserveChannel` for more.
+        """
+        return ObserveChannel(self, observer)
+
     def chain(self, *channels):
         """
         Chain channels together into a single channel.
@@ -405,6 +418,31 @@ class MapChannel(ReadChannel):
         value = yield self.__channel__.next()
         value = self.__transform__(value)
         raise gen.Return(value)
+
+
+class ObserveChannel(MapChannel):
+    """
+    A channel allowing observation of values on a channel.
+
+    Initialized with a source channel and an observer callable, the callable
+    is applied to each source channel message; the result is discarded and the
+    original message is passed along as the output message.
+
+    This allows for side effects such as logging, metrics calculation,
+    etc.
+    """
+
+    @classmethod
+    def make_observer(cls, callable_):
+        def observer(value):
+            callable_(value)
+            return value
+        return observer
+
+    def __init__(self, channel, observer):
+        super(ObserveChannel, self).__init__(
+                channel,
+                self.make_observer(observer))
 
 
 class FlatMapChannel(MapChannel):

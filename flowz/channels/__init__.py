@@ -11,6 +11,7 @@ from .core import (
         GroupChannel,
         IterChannel,
         MapChannel,
+        ObserveChannel,
         ProducerChannel,
         ReadChannel,
         ReadyFutureChannel,

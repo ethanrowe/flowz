@@ -125,6 +125,13 @@ class TestChannelHelpers(object):
                     gc,
                     self.channel, transform=None)
 
+    def test_observe_method(self):
+        func = mock.Mock(name='ObserverCallable')
+        with mock.patch.object(chn, 'ObserveChannel') as oc:
+            self.verify_delegation(self.channel.observe(func),
+                    oc,
+                    self.channel, func)
+
     def test_chain_method(self):
         a, b, c = (mock.Mock(name='Chan%d' % i) for i in range(3))
         with mock.patch.object(chn, 'ChainChannel') as cc:
@@ -200,8 +207,9 @@ class TestWindowChannelHelpers(TestMapChannelHelpers):
 class TestGroupChannelHelpers(TestMapChannelHelpers):
     CLASS = chn.GroupChannel
 
+class TestObserveChannelHelpers(TestMapChannelHelpers):
+    CLASS = chn.ObserveChannel
 
 class TestChainChannelHelpers(TestZipChannelHelpers):
     CLASS = chn.ChainChannel
-
 
