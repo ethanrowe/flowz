@@ -1,21 +1,9 @@
-import mock
 from nose import tools
-from tornado import gen
 from tornado import testing as tt
 
 from flowz import channels
+from .util import drain
 
-@gen.coroutine
-def drain(channel, per_read=lambda x: x):
-    received = []
-    try:
-        while True:
-            value = yield channel.next()
-            received.append(value)
-            per_read(value)
-
-    except channels.ChannelDone:
-        raise gen.Return(received)
 
 def fixtures(vals):
     vals = list(vals)
