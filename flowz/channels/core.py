@@ -310,6 +310,20 @@ class Channel(object):
         return GroupChannel(self, transform=keyfunc)
 
 
+    def observe(self, observer):
+        """
+        Observe items on a channel for side effects
+
+        Given a callable `observer`, passes each message on the channel
+        to `observer` before passing the message along.  Allows observation
+        of channel contents for purposes like logging, metrics, alerting,
+        etc.
+
+        See the `ObserveChannel` for more.
+        """
+        return ObserveChannel(self, observer)
+
+
 class ReadChannel(Channel):
     """
     Wraps any channel with a read-only interface.

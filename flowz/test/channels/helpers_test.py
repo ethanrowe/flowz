@@ -125,6 +125,13 @@ class TestChannelHelpers(object):
                     gc,
                     self.channel, transform=None)
 
+    def test_observe_method(self):
+        func = mock.Mock(name='ObserverCallable')
+        with mock.patch.object(chn, 'ObserveChannel') as oc:
+            self.verify_delegation(self.channel.observe(func),
+                    oc,
+                    self.channel, func)
+
 
 class TestTeeChannelHelpers(TestChannelHelpers):
     CLASS = chn.TeeChannel
@@ -192,4 +199,7 @@ class TestWindowChannelHelpers(TestMapChannelHelpers):
 
 class TestGroupChannelHelpers(TestMapChannelHelpers):
     CLASS = chn.GroupChannel
+
+class TestObserveChannelHelpers(TestMapChannelHelpers):
+    CLASS = chn.ObserveChannel
 
