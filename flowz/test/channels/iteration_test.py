@@ -756,3 +756,63 @@ class GroupChannelOneKeyTest(GroupChannelTest):
         key_by_value = dict((v, key) for v in values)
         return key_by_value, [(key, list(values))]
 
+
+class ChannelObserveTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
+    @property
+    def observer(self):
+        if not hasattr(self, '_observer'):
+            self._observer = mock.Mock(name='ObservationCallable')
+        return self._observer
+
+    def get_channel_with_values(self, values):
+        c = channels.IterChannel(iter(values))
+        return channels.ObserveChannel(c, self.observer)
+
+
+    def get_channel_values_before_error(self, values):
+        def vals():
+            for v in values:
+                yield v
+            raise TestException("Boom!")
+
+        c = channels.IterChannel(vals())
+        return channels.ObserveChannel(c, self.observer)
+
+
+    @gen.coroutine
+    def verify_channel_values(self, chan, values, nesting=False):
+        if not hasattr(self, '_values'):
+            self._values = values
+
+        r = yield super(ChannelObserveTest, self).verify_channel_values(
+                chan, values, nesting=nesting)
+
+        # The observer should be called exactly once per input value, from
+        # the *original* values, not from teeing or any such thing.
+        tools.assert_equal(
+                self.observer.call_args_list,
+                [((val,), {}) for val in self._values])
+
+        raise gen.Return(r)
+
+
+    @tt.gen_test
+    def test_observer_exception(self):
+        # Our observer throws an exception.
+        def observer(val):
+            raise TestException(self, val)
+
+        vals = [mock.Mock() for i in range(3)]
+        chan = channels.IterChannel(iter(vals))
+        chan = channels.ObserveChannel(chan, observer)
+
+        try:
+            # We expect the observer's exception to propagate to here.
+            yield chan.next()
+            # If we got this far, the exception was swallowed up.
+            raise Exception("Failed to raise observer exception!")
+        except TestException as e:
+            # We confirmed the type match by getting here, so just confirm
+            # the args to be confident it's the right exception.
+            tools.assert_equal((self, vals[0]), e.args)
+

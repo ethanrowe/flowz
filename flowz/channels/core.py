@@ -397,6 +397,31 @@ class MapChannel(ReadChannel):
         raise gen.Return(value)
 
 
+class ObserveChannel(MapChannel):
+    """
+    A channel allowing observation of values on a channel.
+
+    Initialized with a source channel and an observer callable, the callable
+    is applied to each source channel message; the result is discarded and the
+    original message is passed along as the output message.
+
+    This allows for side effects such as logging, metrics calculation,
+    etc.
+    """
+
+    @classmethod
+    def make_observer(cls, callable_):
+        def observer(value):
+            callable_(value)
+            return value
+        return observer
+
+    def __init__(self, channel, observer):
+        super(ObserveChannel, self).__init__(
+                channel,
+                self.make_observer(observer))
+
+
 class FlatMapChannel(MapChannel):
     """
     A channel that allows a per-message transform to 0 or more output messages.
