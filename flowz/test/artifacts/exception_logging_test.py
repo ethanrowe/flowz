@@ -28,19 +28,15 @@ class ExceptionLoggingTest(tt.AsyncTestCase):
         """
         Checks that getting an artifact raises and logs an exception
         @param artifact_maker: a callable to build the artifact
-
-        NOTE: This has a hack until I can figure out how to find out if a function is called
-        on a mock without testing its parameters.
         """
         artifact = artifact_maker()
         artifact.logger = mock.Mock()
-        artifact.logger.exception.side_effect = lambda x: artifact.logger.exception.phoo("pham")
 
         try:
             value = yield artifact.get()
             tools.assert_true(False, "Expected exception not thrown")
         except ZeroDivisionError:
-            artifact.logger.exception.phoo.assert_called_with("pham")
+            tools.assert_true(artifact.logger.exception.called, "Exception wasn't logged")
         except:
             tools.assert_true(False, "Different exception raised than expected")
 
