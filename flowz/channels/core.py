@@ -323,6 +323,15 @@ class Channel(object):
         """
         return ObserveChannel(self, observer)
 
+    def chain(self, *channels):
+        """
+        Chain channels together into a single channel.
+
+        Returns a :class:`ChainChannel` of the original channel chained with
+        any number of given ``channels``.  See :class:`ChainChannel` for more.
+        """
+        return ChainChannel([self] + list(channels))
+
 
 class ReadChannel(Channel):
     """
@@ -948,6 +957,45 @@ class ZipChannel(ReadChannel):
             v = yield c.next()
             r.append(v)
         raise gen.Return(tuple(r))
+
+
+class ChainChannel(ReadChannel):
+    """
+    Chains multiple channels together for iterating in sequence.
+
+    Given N source channels, the ChainChannel acts like a channel-oriented
+    :func:`itertools.chain`, such that:
+
+        yield zc.next() --> chan0.next()
+        yield zc.next() --> chan0.next() # raises ChannelDone! --> chan1.next()
+        yield zc.next() --> chan1.next()
+        yield zc.next() --> chan1.next() # raises ChannelDone! --> chan2.next()
+        ...
+        yield zc.next() --> chanN.next()
+        yield zc.next() --> chanN.next() # raises ChannelDone!
+
+    The ``ChainChannel`` produces ``ChannelDone`` and is considered exhausted
+    one the final channel in its input channels raises ``ChannelDone``.
+    """
+    def __init__(self, channels):
+        # The use of ReadChannel's super is deliberate, as ReadChannel
+        # assumes a single input channel.
+        self.__channels__ = list(channels)
+        super(ReadChannel, self).__init__(self.__reader__)
+
+
+    @gen.coroutine
+    def __next_item__(self):
+        chn = self.__channels__
+        while chn:
+            try:
+                v = yield chn[0].next()
+                raise gen.Return(v)
+            except ChannelDone:
+                chn.pop(0)
+        raise ChannelDone("Channel is done.")
+
+        
 
 
 class CoGroupChannel(ReadChannel):

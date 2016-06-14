@@ -132,6 +132,13 @@ class TestChannelHelpers(object):
                     oc,
                     self.channel, func)
 
+    def test_chain_method(self):
+        a, b, c = (mock.Mock(name='Chan%d' % i) for i in range(3))
+        with mock.patch.object(chn, 'ChainChannel') as cc:
+            self.verify_delegation(self.channel.chain(a, b, c),
+                    cc,
+                    [self.channel, a, b, c])
+
 
 class TestTeeChannelHelpers(TestChannelHelpers):
     CLASS = chn.TeeChannel
@@ -202,4 +209,7 @@ class TestGroupChannelHelpers(TestMapChannelHelpers):
 
 class TestObserveChannelHelpers(TestMapChannelHelpers):
     CLASS = chn.ObserveChannel
+
+class TestChainChannelHelpers(TestZipChannelHelpers):
+    CLASS = chn.ChainChannel
 
