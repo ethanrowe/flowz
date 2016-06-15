@@ -1,6 +1,8 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import sys
+
 from tornado import concurrent as cc
 from tornado import gen
 from tornado import ioloop as iol
@@ -375,8 +377,10 @@ class ReadChannel(Channel):
                 yield gen.moment
         except ChannelDone:
             head.set_exception(ChannelDone("Channel is done"))
-        except Exception as e:
-            head.set_exception(e)
+        except:
+            # Capture exception information, including traceback
+            # TODO Possible issue when Python3-compatibility is important
+            head.set_exc_info(sys.exc_info())
 
 
     @gen.coroutine
@@ -477,8 +481,10 @@ class FlatMapChannel(MapChannel):
 
         except ChannelDone:
             head.set_exception(ChannelDone("Channel is done"))
-        except Exception as e:
-            head.set_exception(e)
+        except:
+            # Capture exception information, including traceback
+            # TODO Possible issue when Python3-compatibility is important
+            head.set_exc_info(sys.exc_info())
 
 
 class Windower(object):
