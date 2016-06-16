@@ -114,6 +114,28 @@ class ChannelTest(object):
         yield self.verify_channel_values(chan, values, nesting=True)
 
 
+class TransformingChannelTest(ChannelTest):
+    """
+    Like the baseline `ChannelTest` except implementations provide
+    a value conversion function, when we expect the values emitted by
+    the channel to differ from that of the input channel.
+    """
+    
+    def determine_expected_values(self, values):
+        """
+        Given the input `values` returns the expected emitted values.
+        """
+        return values
+
+    def verify_channel_values(self, chan, values, nesting=False):
+        if not hasattr(self, '_mapped_values'):
+            self._mapped_values = self.determine_expected_values(values)
+            values = self._mapped_values
+        return super(TransformingChannelTest, self).verify_channel_values(
+                chan, values, nesting=nesting)
+
+
+
 class ChannelExceptionTest(object):
     @tt.gen_test
     def test_iteration_and_exception(self):
@@ -480,4 +502,364 @@ class CoGroupStaggeredKeysChannelTest(CoGroupInterleavedChannelTest):
         b = [None for _ in values[:k]]
         b += [(i + k, val) for i, val in enumerate(values[k:])]
         return list(zip(a, b))
+
+
+class WindowChannelTest(ChannelTest, tt.AsyncTestCase):
+    _prepared = None
+
+    def get_sortable_key(self, i):
+        k = mock.Mock(name='SortableKey%d' % i)
+        k.key = i
+        k.__eq__ = lambda m, o: i == getattr(o, 'key', None)
+        k.__ne__ = lambda m, o: i != getattr(o, 'key', None)
+        k.__lt__ = lambda m, o: i < getattr(o, 'key', None)
+        k.__le__ = lambda m, o: i <= getattr(o, 'key', None)
+        k.__gt__ = lambda m, o: i > getattr(o, 'key', None)
+        k.__ge__ = lambda m, o: i >= getattr(o, 'key', None)
+        k.__hash__ = lambda m: hash(i)
+        return k
+
+    def get_sortable_keys(self, count):
+        for i in range(count):
+            yield self.get_sortable_key(i)
+
+    def prepared(self, values):
+        if self._prepared is None:
+            self._prepared = self.prepare_keys_and_values(values)
+        return self._prepared
+
+    def prepare_keys_and_values(self, values):
+        # Each key (but the last) will get emitted with
+        # two items in sequence.
+        # So we'll expect a pair of items per key.
+        keys = list(self.get_sortable_keys(len(values)))
+        keys_by_value = dict((v, [k]) for v, k in zip(values, keys))
+        values_by_key = dict((k, [v]) for k, v in zip(keys, values))
+        for v, k in zip(values[1:], keys):
+            keys_by_value[v].append(k)
+            values_by_key[k].append(v)
+        return keys_by_value, values_by_key
+
+    def determine_expected_values(self, values):
+        _, by_key = self.prepared(values)
+        return [(k, list(by_key[k]))
+                for k in sorted(by_key.keys())]
+
+    @gen.coroutine
+    def verify_channel_values(self, chan, values, nesting=False):
+        if not hasattr(self, '_original_values'):
+            self._original_values = values
+        if values == self._original_values:
+            values = self.determine_expected_values(values)
+        # If we've already mapped them, we expect `values` to already be
+        # expressed in terms of our expectation.
+        yield super(WindowChannelTest, self).verify_channel_values(
+                chan, values, nesting=nesting)
+
+
+    def get_channel_with_values(self, values):
+        by_val, _ = self.prepared(values)
+        c = channels.IterChannel(iter(values))
+        # Per input value, returns the sequence of associated keys.
+        return channels.WindowChannel(c, lambda v: iter(by_val[v]))
+
+
+class WindowChannelDuplicateKeysTest(WindowChannelTest):
+    def get_channel_with_values(self, values):
+        by_val, _ = self.prepared(values)
+        c = channels.IterChannel(iter(values))
+        # Per input value, we double the sequence of associated keys.
+        return channels.WindowChannel(c, lambda v: iter(by_val[v] + by_val[v]))
+
+
+class WindowChannelNumericKeysTest(WindowChannelTest):
+    def alt_values(self):
+        return list(range(5))
+
+    def get_channel_with_values(self, values):
+        return super(WindowChannelNumericKeysTest, self).get_channel_with_values(
+                self.alt_values())
+
+    def prepare_keys_and_values(self, values):
+        # We emit div 2 and div 3 as keys per item.
+        # This means we'll get some messy duplicates.
+        keys_by_value = dict(
+                (i, [i // x for x in (2, 3)])
+                for i in self.alt_values())
+        # Table of values to emitted keys,
+        # with arrows indicating the point at which keys are emitted.
+        # We dedup keys per value, so parens show the deduped keys
+        # 0: 0, 0 (0)
+        # 1: 0, 0 (0)
+        # 2: 1, 0 (1, 0)
+        # 3: 1, 1 (1) -> 0: 0, 1, 2
+        # 4: 2, 1 (2, 1)
+        #  -> 1: 2, 3, 4
+        #  -> 2: 4
+        vals_by_key = {
+                0: [0, 1, 2],
+                1: [2, 3, 4],
+                2: [4]}
+        return keys_by_value, vals_by_key
+
+
+
+class WindowWithNoFunc(object):
+    def item_getter(self, keys):
+        return lambda _, i: (list(keys),)[i]
+
+    def get_channel_with_values(self, values):
+        # In this case, no transform function is given.
+        # The default behavior should be to attempt to
+        # take the first positional element of each value.
+        by_val, _ = self.prepared(values)
+        for val in values:
+            val.__getitem__ = self.item_getter(by_val[val])
+        c = channels.IterChannel(iter(values))
+        return channels.WindowChannel(c)
+
+
+class WindowChannelDefaultTransformTest(WindowWithNoFunc, WindowChannelTest):
+    pass
+
+
+class WindowChannelSortingTest(WindowChannelTest):
+    def get_channel_with_values(self, values):
+        by_val, _ = self.prepared(values)
+        c = channels.IterChannel(iter(values))
+        # This reverses the order of keys emitted per item, but we expect
+        # that those window keys will still be emitted in sorted order on
+        # the other side.
+        return channels.WindowChannel(c, lambda v: reversed(by_val[v]))
+
+
+class WindowChannelSortingDefaultTransformTest(
+        WindowWithNoFunc, WindowChannelSortingTest):
+    def item_getter(self, keys):
+        return super(
+                WindowChannelSortingDefaultTransformTest, self).item_getter(
+                        list(reversed(keys)))
+
+
+class WindowChannelNoKeysTest(WindowChannelTest):
+    def prepare_keys_and_values(self, values):
+        key = self.get_sortable_key(0)
+        # Every even value emits key
+        # Every odd value emits no key
+        # The odd values won't be included in anything.
+        # The even values will get one window each because
+        # the key wasn't sustained across consecutive values,
+        # resulting in distinct windows.
+        keys_by_value = dict((v, [key]) for v in values[slice(0, None, 2)])
+        keys_by_value.update(dict((v, []) for v in values[slice(1, None, 2)]))
+        return keys_by_value, key
+
+    def determine_expected_values(self, values):
+        _, key = self.prepared(values)
+        return [(key, [val]) for val in values[slice(0, None, 2)]]
+
+
+class WindowChannelNoKeysDefaultTransformTest(
+        WindowWithNoFunc, WindowChannelNoKeysTest):
+    pass
+
+class WindowChannelCommonValueTest(WindowChannelTest):
+    def prepare_keys_and_values(self, values):
+        # One key will be common to everything, while
+        # other keys will be per-item.
+        keys = list(self.get_sortable_keys(len(values) + 1))
+        # We expect the last guy to be associated with all of 'em.
+        keys_by_value = dict((v, [k, keys[-1]]) for v, k in zip(values, keys))
+        values_by_key = dict((k, [v]) for k, v in zip(keys, values))
+        # And again, the last key is associated with all values.
+        values_by_key[keys[-1]] = list(values)
+        return keys_by_value, values_by_key
+
+class WindowChannelCommonValueDefaultTransformTest(
+        WindowWithNoFunc, WindowChannelCommonValueTest):
+    pass
+
+class WindowChannelCommonValueEarlySortTest(WindowChannelTest):
+    def prepare_keys_and_values(self, values):
+        # The earliest key will be common to everything, while others
+        # are per-item.
+        keys = list(self.get_sortable_keys(len(values) + 1))
+        keys_by_value = dict((v, [keys[0], k]) for v, k in zip(values, keys[1:]))
+        values_by_key = dict((k, [v]) for k, v in zip(keys[1:], values))
+        values_by_key[keys[0]] = list(values)
+        return keys_by_value, values_by_key
+
+    def determine_expected_values(self, values):
+        _, values_by_key = self.prepared(values)
+        keys = list(sorted(values_by_key.keys()))
+        key = keys.pop(0)
+        keys.insert(-1, key)
+        return [(k, values_by_key[k]) for k in keys]
+
+class WindowChannelCommonValueEarlySortNoTransformTest(
+        WindowWithNoFunc, WindowChannelCommonValueEarlySortTest):
+    pass
+
+class GroupChannelTest(WindowChannelTest):
+    def prepare_keys_and_values(self, values):
+        # Must return tuple of:
+        # - a dict mapping value to associated group by
+        # - the actual list of expected channel values.
+        # For the base case, we'll just do simplistic windowing
+        # based on buckets of two.
+        key_by_value = dict(
+                (v, i // 2) for i, v in enumerate(values))
+        expected_vals = [
+                (i // 2, values[i:i+2])
+                for i in range(0, len(values), 2)]
+        return key_by_value, expected_vals
+
+    def determine_expected_values(self, values):
+        _, expect_vals = self.prepared(values)
+        return expect_vals
+
+    def get_channel_with_values(self, values):
+        by_val, _ = self.prepared(values)
+        c = channels.IterChannel(iter(values))
+        # Per input value, returns the single associated key
+        return channels.GroupChannel(c, lambda v: by_val[v])
+
+
+class GroupChannelDefaultTransformTest(GroupChannelTest):
+    def item_getter(self, item):
+        return lambda _, i: (item,)[i]
+
+    def get_channel_with_values(self, values):
+        # In this case, no transform function is given; the
+        # default behavior is to assume the grouping key is
+        # the first positional element of each value (val[0]).
+        by_val, _ = self.prepared(values)
+        for val in values:
+            val.__getitem__ = self.item_getter(by_val[val])
+        c = channels.IterChannel(iter(values))
+        # No transform functon.
+        return channels.GroupChannel(c)
+
+
+class GroupChannelRepeatKeysTest(GroupChannelTest):
+    def prepare_keys_and_values(self, values):
+        # Group using mod 2, so we get repeat keys.
+        key_by_value = dict(
+                (v, i % 2) for i, v in enumerate(values))
+        vals = [(i % 2, [v]) for i, v in enumerate(values)]
+        return key_by_value, vals
+
+
+class GroupChannelOneKeyTest(GroupChannelTest):
+    def prepare_keys_and_values(self, values):
+        key = mock.Mock(name='AMockKey')
+        key_by_value = dict((v, key) for v in values)
+        return key_by_value, [(key, list(values))]
+
+
+class ChannelObserveTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
+    @property
+    def observer(self):
+        if not hasattr(self, '_observer'):
+            self._observer = mock.Mock(name='ObservationCallable')
+        return self._observer
+
+    def get_channel_with_values(self, values):
+        c = channels.IterChannel(iter(values))
+        return channels.ObserveChannel(c, self.observer)
+
+
+    def get_channel_values_before_error(self, values):
+        def vals():
+            for v in values:
+                yield v
+            raise TestException("Boom!")
+
+        c = channels.IterChannel(vals())
+        return channels.ObserveChannel(c, self.observer)
+
+
+    @gen.coroutine
+    def verify_channel_values(self, chan, values, nesting=False):
+        if not hasattr(self, '_values'):
+            self._values = values
+
+        r = yield super(ChannelObserveTest, self).verify_channel_values(
+                chan, values, nesting=nesting)
+
+        # The observer should be called exactly once per input value, from
+        # the *original* values, not from teeing or any such thing.
+        tools.assert_equal(
+                self.observer.call_args_list,
+                [((val,), {}) for val in self._values])
+
+        raise gen.Return(r)
+
+
+    @tt.gen_test
+    def test_observer_exception(self):
+        # Our observer throws an exception.
+        def observer(val):
+            raise TestException(self, val)
+
+        vals = [mock.Mock() for i in range(3)]
+        chan = channels.IterChannel(iter(vals))
+        chan = channels.ObserveChannel(chan, observer)
+
+        try:
+            # We expect the observer's exception to propagate to here.
+            yield chan.next()
+            # If we got this far, the exception was swallowed up.
+            raise Exception("Failed to raise observer exception!")
+        except TestException as e:
+            # We confirmed the type match by getting here, so just confirm
+            # the args to be confident it's the right exception.
+            tools.assert_equal((self, vals[0]), e.args)
+
+class ChainChannelTest(ChannelTest, ChannelExceptionTest, tt.AsyncTestCase):
+    def split_values(self, values):
+        # Two channels together.
+        split = (len(values) // 2) + 1
+        va, vb = values[:split], values[split:]
+        return va, vb
+
+    def get_channel_with_values(self, values):
+        chns = [channels.IterChannel(vals)
+                for vals in self.split_values(values)]
+        return channels.ChainChannel(chns)
+
+    def get_channel_values_before_error(self, values):
+        def valgen(vals):
+            for v in vals:
+                yield v
+            raise TestException("Boom!")
+
+        splits = list(self.split_values(values))
+        splits[-1] = valgen(splits[-1])
+        chans = [channels.IterChannel(vls)
+                 for vls in splits]
+        return channels.ChainChannel(chans)
+
+
+class ChainChannelWithEmptiesTest(ChainChannelTest):
+    def split_values(self, values):
+        # An empty channel between every other one-channel value
+        for value in values:
+            yield [value]
+            yield ()
+
+
+class ChainChannelRearLoadedTest(ChainChannelTest):
+    def split_values(self, values):
+        # All the values are in the final of three channels.
+        yield ()
+        yield ()
+        yield values
+
+class ChainChannelFrontLoadedTest(ChainChannelTest):
+    def split_values(self, values):
+        # All the values are in the first of three channels.
+        yield values
+        yield ()
+        yield ()
 

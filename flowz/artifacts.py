@@ -112,7 +112,11 @@ class ExtantArtifact(AbstractArtifact):
 
     @gen.coroutine
     def __start_get__(self):
-        result = yield self.getter()
+        try:
+            result = yield self.getter()
+        except:
+            self.logger.exception("%s getter failure." % str(self))
+            raise
         self.logger.info("%s retrieved." % str(self))
         raise gen.Return(result)
 
@@ -138,12 +142,12 @@ class DerivedArtifact(AbstractArtifact):
     def __start_get__(self):
         self.logger.info("%s waiting on sources." % str(self))
         sources = yield [maybe_artifact(source) for source in self.sources]
-        self.logger.info("%s applying logic." % str(self))
+        self.logger.info("%s running deriver." % str(self))
         yield gen.moment
         try:
             result = self.deriver(*sources)
         except:
-            self.logger.exception("%s failure." % str(self))
+            self.logger.exception("%s deriver failure." % str(self))
             raise
         self.__exists__ = True
         self.logger.info("%s ready." % str(self))
@@ -170,11 +174,11 @@ class ThreadedDerivedArtifact(DerivedArtifact):
 
     @concurrent.run_on_executor
     def __derive__(self, *sources):
-        self.logger.info("%s applying logic on executor." % str(self))
+        self.logger.info("%s running deriver on executor." % str(self))
         try:
             return self.deriver(*sources)
         except:
-            self.logger.exception("%s failure." % str(self))
+            self.logger.exception("%s deriver failure." % str(self))
             raise
 
     @gen.coroutine
@@ -251,7 +255,11 @@ class TransformedArtifact(WrappedArtifact):
     def __start_get__(self):
         value = yield maybe_artifact(self.value)
         yield gen.moment
-        value = self.transformer(value)
+        try:
+            value = self.transformer(value)
+        except:
+            self.logger.exception("%s transformer failure." % str(self))
+            raise
         raise gen.Return(value)
 
 
