@@ -14,16 +14,22 @@ class AbstractArtifact(object):
     An object that wraps the details for asynchronous access to an artifact.
     """
 
-    logger = logging.getLogger('Artifact')
+    logger = None
     name = None
 
     __exists__ = False
     __ensure__ = None
     __get__ = None
 
-    def __init__(self, logger=None, name=None):
+    def _configure_logger(self, logger=None):
         if logger:
             self.logger = logger
+        elif not AbstractArtifact.logger:
+            AbstractArtifact.logger = logging.getLogger('Artifact')
+            self.logger.debug("Instantiated Artifact logger")
+
+    def __init__(self, logger=None, name=None):
+        self._configure_logger(logger)
         if not name:
             self._as_string = type(self).__name__
         else:
