@@ -1,5 +1,7 @@
 from collections import OrderedDict
 from concurrent import futures
+import logging
+import mock
 
 from nose import tools
 from tornado import gen
@@ -203,3 +205,17 @@ class ArtifactsTest(tt.AsyncTestCase):
         future3 = maybe_artifact(dict_)
         val3 = yield future3
         tools.assert_equal(val3, dict_)
+
+    @mock.patch.object(logging.Logger, 'debug')
+    @tt.gen_test
+    def test_artifact_logger(self, mock_debug):
+        logger = mock.Mock()
+        artifact = ExtantArtifact(None, logger)
+        tools.assert_equals(artifact.logger, logger)
+        tools.assert_false(mock_debug.called)
+        tools.assert_is_none(ExtantArtifact.logger)
+
+        artifact = ExtantArtifact(None)
+        tools.assert_not_equals(artifact.logger, logger)
+        tools.assert_true(mock_debug.called)
+        tools.assert_is_not_none(ExtantArtifact.logger)
