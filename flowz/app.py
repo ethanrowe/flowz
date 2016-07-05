@@ -10,16 +10,16 @@ class Flo(object):
     """
     Class for managing data processing workflows.
 
-    A `Flo` is given some number of `targets`, which must implement a minimal
-    interface as demonstrated by `flowz.targets.Target`.
+    A `Flo` is given some number of target 
+    :class:`flowz.channels.Channel` objects.
 
     The `Flo` can then be `run()`, and it will run a `tornado.ioloop.IOLoop`
-    until all `targets` have completed, at which point `run()` will return
-    control to the caller.
+    until all target channels have been consumed, at which point `run()`
+    will return control to the caller.
 
     Unlike typical tornado applications, unhandled exceptions don't get
     caught by the `IOLoop`; rather, unhandled exceptions that make it all
-    the way past a given `target` will cause the `IOLoop` to stop and the
+    the way past a given channel will cause the `IOLoop` to stop and the
     exception to propagate to the caller.
     """
 
@@ -27,7 +27,7 @@ class Flo(object):
 
     def __init__(self, targets, loop=None):
         """
-        Initialize a `Flo` with the given `targets`.
+        Initialize a `Flo` with the given `targets` channels.
 
         If `loop` is not given, a new loop will be created on the current
         thread, via `get_default_ioloop`.
@@ -79,8 +79,8 @@ class Flo(object):
         Runs the workflow, blocking until completion.
 
         Completion is achieved when either:
-        - an unhandled exception propagates past a target.
-        - all targets have produced results.
+        - an unhandled exception propagates past a channel.
+        - all channels have been consumed.
 
         Once complete, the underlying `ioloop` has been stopped.
 
