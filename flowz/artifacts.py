@@ -44,7 +44,7 @@ class AbstractArtifact(object):
         Returns a Future that will have result True when the artifact's existence is assured.
         """
         if self.__ensure__ is None:
-            self.logger.info("%s starting ensure" % str(self))
+            self.logger.debug("%s starting ensure" % str(self))
             self.__ensure__ = self.__start_ensure__()
         return self.__ensure__
 
@@ -61,7 +61,7 @@ class AbstractArtifact(object):
         Returns a Future the result of which will be the artifact itself.
         """
         if self.__get__ is None:
-            self.logger.info("%s starting get" % str(self))
+            self.logger.debug("%s starting get" % str(self))
             self.__get__ = self.__start_get__()
         return self.__get__
 
