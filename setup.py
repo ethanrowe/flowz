@@ -21,6 +21,7 @@ setup(
     tests_require = [
         'mock',
         'nose',
+        'six >= 1.9.0',
         ],
     install_requires = [
         'tornado >= 4.2',
