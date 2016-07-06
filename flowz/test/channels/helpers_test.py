@@ -101,7 +101,7 @@ class TestChannelHelpers(object):
     def test_windowby_method(self):
         func = mock.Mock(name='WindowKeyingFunction')
         with mock.patch.object(chn, 'WindowChannel') as wc:
-            self.verify_delegation(self.channel.windowby(func),
+            self.verify_delegation(self.channel.windowby(keys_func=func),
                     wc,
                     self.channel, transform=func)
 
@@ -115,7 +115,7 @@ class TestChannelHelpers(object):
     def test_groupby_method(self):
         func = mock.Mock(name='GroupKeyingFunction')
         with mock.patch.object(chn, 'GroupChannel') as gc:
-            self.verify_delegation(self.channel.groupby(func),
+            self.verify_delegation(self.channel.groupby(key_func=func),
                     gc,
                     self.channel, transform=func)
 

@@ -284,32 +284,32 @@ class Channel(object):
         return MapChannel(self, lambda item: item[key_or_slice])
 
 
-    def windowby(self, keyfunc=None):
+    def windowby(self, keys_func=None):
         """
-        Window the items according to `keyfunc`.
+        Window the items according to `keys_func`.
 
-        Assuming `keyfunc` is a callable that, given as argument
+        Assuming `keys_func` is a callable that, given as argument
         any item within `self`, returns a sequence of sortable, hashable
-        keys, applies `keyfunc` to each item and organizes items according
+        keys, applies `keys_func` to each item and organizes items according
         to the window keys emitted.
 
         See the `WindowChannel` for more.
         """
-        return WindowChannel(self, transform=keyfunc)
+        return WindowChannel(self, transform=keys_func)
 
 
-    def groupby(self, keyfunc=None):
+    def groupby(self, key_func=None):
         """
-        Group items according to `keyfunc`.
+        Group items according to `key_func`.
 
-        Assuming `keyfunc` is a calalble that, given as argument any
-        item within `self`, returns grouping key, applies `keyfunc` to
+        Assuming `key_func` is a callable that, given as argument any
+        item within `self`, returns grouping key, applies `key_func` to
         each item and organizes items into groups by grouping keys
         emitted.
 
         See the `GroupChannel` for more.
         """
-        return GroupChannel(self, transform=keyfunc)
+        return GroupChannel(self, transform=key_func)
 
 
     def observe(self, observer):
