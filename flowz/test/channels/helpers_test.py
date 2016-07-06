@@ -125,6 +125,19 @@ class TestChannelHelpers(object):
                     gc,
                     self.channel, transform=None)
 
+    def test_rollby_method(self):
+        func = mock.Mock(name='RollingWindowFunction')
+        with mock.patch.object(chn, 'RollingWindowChannel') as gc:
+            self.verify_delegation(self.channel.rollby(2, emit_partials=True, key_func=func),
+                                   gc,
+                                   self.channel, 2, emit_partials=True, transform=func)
+
+    def test_rollby_nofunc_method(self):
+        with mock.patch.object(chn, 'RollingWindowChannel') as gc:
+            self.verify_delegation(self.channel.rollby(1),
+                                   gc,
+                                   self.channel, 1, emit_partials=False, transform=None)
+
     def test_observe_method(self):
         func = mock.Mock(name='ObserverCallable')
         with mock.patch.object(chn, 'ObserveChannel') as oc:
