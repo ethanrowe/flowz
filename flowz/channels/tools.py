@@ -1,3 +1,7 @@
+"""
+Helper functions to use with channels, to avoid combinatorial explosion of the core classes.
+"""
+
 from __future__ import absolute_import
 from __future__ import print_function
 
@@ -20,6 +24,8 @@ def rolling(window_size):
     """
     Return a callable that can be passed to windowby() to put channel objects
     into rolling windows of `window_size`.
+
+    The callable retains internal state, so it should not be used in multiple contexts.
 
     The return windows will ramp from size 1 up to `window_size`, then back down
     to 1 by the end of the channel.  In order to constrain them to a particular
