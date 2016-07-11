@@ -312,25 +312,6 @@ class Channel(object):
         return GroupChannel(self, transform=key_func)
 
 
-    def rollby(self, window_size, emit_partials=False, key_func=None):
-        """
-        Group items into rolling windows of size `window_size`.
-
-        If `emit_partials` is true, the early groups that have not yet reached
-        the target size will be emitted, guaranteeing a group for each item
-        in the input channel.  If false, no groups will be emitted until they
-        have reached the target size, and note that a channel with less than
-        `window_size` elements will not end up emitting anything.
-
-        `key_func` is applied to each item to get its key, and each group is
-        emitted with the key of the last item added.
-
-        See the `RollingWindowChannel` for more.
-        """
-        return RollingWindowChannel(self, window_size,
-                                    emit_partials=emit_partials, transform=key_func)
-
-
     def observe(self, observer):
         """
         Observe items on a channel for side effects

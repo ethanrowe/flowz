@@ -862,3 +862,4 @@ class ChainChannelFrontLoadedTest(ChainChannelTest):
         yield values
         yield ()
         yield ()
+
