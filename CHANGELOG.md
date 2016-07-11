@@ -1,3 +1,17 @@
+# Version 0.5.0
+
+* Adds the new `flowz.channels.tools` module for utility functions/helpers
+  that extend the flexibility of channels without expanding the core interface.
+* Adds rolling window functionality therein.
+
+# Version 0.4.0
+
+* Removes (silently) deprecated targets classes and tests
+    * Including support within the `flowz.app.Flo` class
+* Downgrades some logging messages to DEBUG level
+* Changes some keyword parameters on windowby/groupby (from keyfunc on both
+  to keys_func and key_func, respectively).
+
 # Version 0.3.0
 
 * Windowing and grouping: WindowChannel, GroupChannel, windowby(), groupby()
