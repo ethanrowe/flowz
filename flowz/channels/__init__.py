@@ -15,7 +15,6 @@ from .core import (
         ProducerChannel,
         ReadChannel,
         ReadyFutureChannel,
-        RollingWindowChannel,
         TeeChannel,
         WindowChannel,
         ZipChannel)
