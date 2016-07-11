@@ -3,7 +3,7 @@ from tornado import gen
 from tornado import testing as tt
 
 from flowz import channels
-from flowz.channels.tools import rollby, pin_group_size, exact_group_size
+from flowz.channels.tools import rolling, pinned_group_size, exact_group_size
 from .util import raises_channel_done
 
 
@@ -37,7 +37,7 @@ class RollingWindowTest(tt.AsyncTestCase):
     @tt.gen_test
     def test_partials(self):
         values = [i for i in range(10)]
-        chan = channels.IterChannel(iter(values)).windowby(rollby(5))
+        chan = channels.IterChannel(iter(values)).windowby(rolling(5))
         yield self.verify_channel_values(chan,
                                          ((0, [0]),
                                           (1, [0, 1]),
@@ -57,7 +57,7 @@ class RollingWindowTest(tt.AsyncTestCase):
     @tt.gen_test
     def test_no_partials(self):
         values = [i for i in range(10)]
-        chan = channels.IterChannel(iter(values)).windowby(rollby(5)).filter(exact_group_size(5))
+        chan = channels.IterChannel(iter(values)).windowby(rolling(5)).filter(exact_group_size(5))
         yield self.verify_channel_values(chan,
                                          ((4, [0, 1, 2, 3, 4]),
                                           (5, [1, 2, 3, 4, 5]),
@@ -69,7 +69,7 @@ class RollingWindowTest(tt.AsyncTestCase):
     @tt.gen_test
     def test_pin_both(self):
         values = [i for i in range(10)]
-        chan = channels.IterChannel(iter(values)).windowby(rollby(5)).filter(pin_group_size(2,4))
+        chan = channels.IterChannel(iter(values)).windowby(rolling(5)).filter(pinned_group_size(2, 4))
         yield self.verify_channel_values(chan,
                                          ((1, [0, 1]),
                                           (2, [0, 1, 2]),
@@ -81,7 +81,7 @@ class RollingWindowTest(tt.AsyncTestCase):
     @tt.gen_test
     def test_pin_upper(self):
         values = [i for i in range(10)]
-        chan = channels.IterChannel(iter(values)).windowby(rollby(5)).filter(pin_group_size(upper=4))
+        chan = channels.IterChannel(iter(values)).windowby(rolling(5)).filter(pinned_group_size(upper=4))
         yield self.verify_channel_values(chan,
                                          ((0, [0]),
                                           (1, [0, 1]),
@@ -95,7 +95,7 @@ class RollingWindowTest(tt.AsyncTestCase):
     @tt.gen_test
     def test_pin_lower(self):
         values = [i for i in range(10)]
-        chan = channels.IterChannel(iter(values)).windowby(rollby(5)).filter(pin_group_size(lower=4))
+        chan = channels.IterChannel(iter(values)).windowby(rolling(5)).filter(pinned_group_size(lower=4))
         yield self.verify_channel_values(chan,
                                          ((3, [0, 1, 2, 3]),
                                           (4, [0, 1, 2, 3, 4]),
@@ -109,11 +109,11 @@ class RollingWindowTest(tt.AsyncTestCase):
     @tt.gen_test
     def test_window_size_too_big(self):
         values = [i for i in range(10)]
-        chan = channels.IterChannel(iter(values)).windowby(rollby(15)).filter(exact_group_size(15))
+        chan = channels.IterChannel(iter(values)).windowby(rolling(15)).filter(exact_group_size(15))
         yield self.verify_channel_values(chan, ())
 
     @tt.gen_test
     def test_empty_source(self):
         values = []
-        chan = channels.IterChannel(iter(values)).windowby(rollby(5))
+        chan = channels.IterChannel(iter(values)).windowby(rolling(5))
         yield self.verify_channel_values(chan, ())

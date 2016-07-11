@@ -16,7 +16,7 @@ class Roller(object):
         self.count += 1
 
 
-def rollby(window_size):
+def rolling(window_size):
     """
     Return a callable that can be passed to windowby() to put channel objects
     into rolling windows of `window_size`.
@@ -28,7 +28,7 @@ def rollby(window_size):
     return Roller(window_size)
 
 
-def pin_group_size(lower=0, upper=sys.maxint):
+def pinned_group_size(lower=0, upper=sys.maxint):
     """
     Returns a function that will test its argument -- expected to be a (k,g) tuple
     with a key and a collection -- and return True iff the length of the collection
@@ -47,4 +47,4 @@ def exact_group_size(size):
 
     This is intended to used like `chan.filter(exact_group_size(5))`.
     """
-    return pin_group_size(size, size)
+    return pinned_group_size(size, size)
