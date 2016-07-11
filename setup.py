@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name = 'flowz',
-    version = '0.4.0',
+    version = '0.5.0',
     description = 'Async I/O - oriented dependency programming framework',
     url = 'https://github.com/ethanrowe/flowz',
     author = 'Ethan Rowe',
