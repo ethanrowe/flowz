@@ -10,6 +10,7 @@ from tornado import locks
 
 from flowz import util
 
+
 class ChannelDone(Exception):
     """
     Exception throw when trying to access a completed channel.
@@ -17,7 +18,10 @@ class ChannelDone(Exception):
     This is akin to StopIteration, but channel-oriented.  We can't
     use StopIteration because `tornado.gen.coroutine` swallows those.
     """
-    pass
+
+    def __init__(self, *args, **kwargs):
+        super(ChannelDone, self).__init__(*args, **kwargs)
+        #print('Created a ChannelDone: %s' % args[0])
 
 
 class Channel(object):
@@ -135,7 +139,7 @@ class Channel(object):
 
         """
         if self.__done__:
-            raise ChannelDone("Channel is done")
+            raise ChannelDone("Channel is done (Channel.next)")
 
         # Only one reader may advance the state at a time.
         yield self.__read_blocker__.acquire()
@@ -376,7 +380,7 @@ class ReadChannel(Channel):
                 yield read_f
                 yield gen.moment
         except ChannelDone:
-            head.set_exception(ChannelDone("Channel is done"))
+            head.set_exception(ChannelDone("Channel is done (ReadChannel.__reader__)"))
         except:
             # Capture exception information, including traceback
             # TODO Possible issue when Python3-compatibility is important
@@ -480,7 +484,7 @@ class FlatMapChannel(MapChannel):
                     yield gen.moment
 
         except ChannelDone:
-            head.set_exception(ChannelDone("Channel is done"))
+            head.set_exception(ChannelDone("Channel is done (FlatMapChannel.__reader__)"))
         except:
             # Capture exception information, including traceback
             # TODO Possible issue when Python3-compatibility is important
@@ -636,7 +640,7 @@ class WindowChannel(FlatMapChannel):
             # If it's none, we've already been here before; this
             # channel is done (tail has been released)
             if win is None:
-                raise ChannelDone("Channel is done")
+                raise ChannelDone("Channel is done (WindowChannel.__next_item__)")
             # If here, this is the first time the input channel through
             # the ChannelDone, so we release the windower's tail and
             # clear the windower from the channel.
@@ -775,7 +779,7 @@ class ReadyFutureChannel(ReadChannel):
                 read_f = cc.Future()
                 head_old.set_result((head_new, read_f, f.result()))
                 if self._read_done and not self._waiting:
-                    self.__head__.set_exception(ChannelDone("Channel is done"))
+                    self.__head__.set_exception(ChannelDone("Channel is done (ReadyFutureChannel.__item_ready__)"))
 
 
     @gen.coroutine
@@ -883,7 +887,7 @@ class ProducerChannel(Channel):
         yield self.__ready__
         last_f = self.__head__
         if last_f.done():
-            raise ChannelDone()
+            raise ChannelDone("Channel is done (ProducerChannel.put)")
         if exception:
             last_f.set_exception(item)
         else:
@@ -905,7 +909,19 @@ class ProducerChannel(Channel):
         any other channel.
         """
         if not self.__head__.done():
-            self.__head__.set_exception(ChannelDone("Channel is done"))
+            self.__head__.set_exception(ChannelDone("Channel is done (ProducerChannel.close)"))
+            # HACK This tweaks the internal state of the future in such a way that:
+            #   -- it is still regarded as representing an exception, but
+            #   -- its traceback logger no longer has a formatted_tb value
+            # The reason for this is to suppress the checks done by tornado
+            #   (in tornado.concurrent._TracebackLogger.__del__)
+            #   that print out "Future exception was never retrieved" messages.
+            # This is highly reliant on internals of tornado that might change,
+            #   which is why it is wrapped in a broad try-except.
+            try:
+                self.__head__._tb_logger.formatted_tb = None
+            except:
+                pass
 
 
 class IterChannel(ProducerChannel):
@@ -999,7 +1015,7 @@ class ChainChannel(ReadChannel):
                 raise gen.Return(v)
             except ChannelDone:
                 chn.pop(0)
-        raise ChannelDone("Channel is done.")
+        raise ChannelDone("Channel is done (ChainChannel.__next_item__)")
 
         
 
@@ -1114,7 +1130,7 @@ class CoGroupChannel(ReadChannel):
         # If there are no next_reads, there is no more work to be done.
         if not next_reads:
             # No qualified keys remaining.  We're done.
-            raise ChannelDone("Channel is done")
+            raise ChannelDone("Channel is done (CoGroupChannel.__next_item__)")
         
         # Propagates the guys with the lowest qualifying key to the state
         # list, and asynchronously fetch their respective channel's next vals.
