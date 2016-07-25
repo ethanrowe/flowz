@@ -18,10 +18,7 @@ class ChannelDone(Exception):
     This is akin to StopIteration, but channel-oriented.  We can't
     use StopIteration because `tornado.gen.coroutine` swallows those.
     """
-
-    def __init__(self, *args, **kwargs):
-        super(ChannelDone, self).__init__(*args, **kwargs)
-        #print('Created a ChannelDone: %s' % args[0])
+    pass
 
 
 def set_channel_done_exception(fut, loc):
