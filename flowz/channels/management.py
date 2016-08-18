@@ -147,7 +147,7 @@ class ChannelManager(object):
             raise KeyError("No such key %s" % repr(key))
 
 
-def _channelproperty(manager_name, fn):
+def _channelmethod(manager_name, fn):
     @functools.wraps(fn)
     def wrapped(self):
         manager = getattr(self, manager_name)
@@ -157,7 +157,11 @@ def _channelproperty(manager_name, fn):
         except KeyError:
             manager.add_builder(name, lambda: fn(self))
             return manager[name]
-    return property(wrapped)
+    return wrapped
+
+def _channelproperty(manager_name, fn):
+    return property(_channelmethod(manager_name, fn))
+
 
 def channelproperty(fn_or_name):
     """
@@ -251,4 +255,98 @@ def channelproperty(fn_or_name):
     if callable(fn_or_name):
         return _channelproperty('channel_manager', fn_or_name)
     return lambda fn: _channelproperty(fn_or_name, fn)
+
+
+def channelmethod(fn_or_name):
+    """
+    Decorates a builder method to act as an access-managed channel get method.
+
+    Expects to decorate a callable for an object that has a
+    :class:`ChannelManager` instance.  The callable should return a
+    channel to be managed.
+
+    The result is a method that fronts access to the corresponding
+    channel via the :class:`ChannelManager`, meaning that first call
+    of the method will cause the build logic to run, returning the
+    underlying channel, while each subsequent call of the method will
+    return a new :meth:`flowz.channels.core.Channel.tee` result.
+
+    By default, the :class:`ChannelManager` instance is expected to be
+    found at the ``channel_manager`` property of the object.  However,
+    this can be overridden; call the decorator with an alternate string
+    name instead of a function, and you'll get a new decorator function
+    bound to that opposite name.
+
+    An example::
+        from __future__ import print_function
+
+        from flowz import app
+        from flowz.channels import core
+        from flowz.channels import management as mgmt
+
+        class StupidExample(object):
+            def __init__(self, count):
+                self.channel_manager = mgmt.ChannelManager()
+                self.count = count
+
+
+            # We get a channel of numbers from 0 to count.
+            @mgmt.channelmethod
+            def numbers(self):
+                return core.IterChannel(range(self.count))
+
+            # Whereas this is the doubling of those numbers.
+            @mgmt.channelmethod
+            def doubles(self):
+                # self.numbers might be the raw IterChannel, or
+                # it might be a tee thereof, depending on what
+                # has happened first.
+                return self.numbers().map(lambda i: i*2)
+
+            # This pairs them up.  It is guaranteed that there
+            # will be at least one tee of self.numbers, because
+            # it is accessed twice (once directly, once via doubles)
+            @mgmt.channelmethod
+            def pairs(self):
+                return self.numbers().zip(self.doubles())
+
+        # This will print
+        # (0, 0)
+        # (1, 2)
+        # (2, 4)
+        # (3, 6)
+        # (4, 8)
+        app.Flo([StupidExample(5).pairs().map(print)]).run()
+
+    If you wanted to name your :class:`ChannelManager` something else,
+    this would do it::
+        class OtherExample(object):
+            def __init__(self, count):
+                self.mgr = mgmt.ChannelManager()
+                self.count = count
+
+            @mgmt.channelmethod('mgr')
+            def numbers(self):
+                return core.IterChannel(range(self.count))
+
+            @mgmt.channelmethod('mgr')
+            def doubles(self):
+                return self.numbers().map(lambda i: i*2)
+
+            @mgmt.channelmethod('mgr')
+            def pairs(self):
+                return self.numbers().zip(self.doubles())
+
+    Args:
+        fn_or_name (callable or string): if a callable, the callable to
+            be used as the underlying ``buildfunc`` for the managed channel
+            associated with this method.  Otherwise, the name of attribute
+            at which the :class:`ChannelManager` would be found.
+
+    Returns a new method if `fn_or_name` was a callable, and a new decorator
+    function bound to the alternate attribute name otherwise.
+    """
+    if callable(fn_or_name):
+        return _channelmethod('channel_manager', fn_or_name)
+    return lambda fn: _channelmethod(fn_or_name, fn)
 

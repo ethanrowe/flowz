@@ -212,6 +212,7 @@ class TestChannelProperty(ChannelBuildHelperCases):
 
 MANAGER_NAME = str(mock.Mock(name='AChannelManager'))
 prop = management.channelproperty(MANAGER_NAME)
+meth = management.channelmethod(MANAGER_NAME)
 
 class TestChannelPropertyAlternateName(TestChannelProperty):
     def setup(self):
@@ -238,5 +239,63 @@ class TestChannelPropertyAlternateName(TestChannelProperty):
     @prop
     def final(self):
         return self.build('final', self.child_a, self.child_b)
+
+
+class TestChannelMethod(ChannelBuildHelperCases):
+    """
+    ChannelBuildHelperCases test using channelmethod to build channels.
+
+    The get_foo() accessors are just lambdas on top of the underlying methods.
+    """
+    def build_channel_accessors(self):
+        for name in self.HELPER_NAMES:
+            setattr(self, 'get_%s' % name, getattr(self, name))
+
+    @management.channelmethod
+    def base_a(self):
+        return self.build('base_a')
+
+    @management.channelmethod
+    def base_b(self):
+        return self.build('base_b')
+
+    @management.channelmethod
+    def child_a(self):
+        return self.build('child_a', self.base_a())
+
+    @management.channelmethod
+    def child_b(self):
+        return self.build('child_b', self.base_b())
+
+    @management.channelmethod
+    def final(self):
+        return self.build('final', self.child_a(), self.child_b())
+
+
+class TestChannelMethodAlternateName(TestChannelMethod):
+    def setup(self):
+        setattr(self, MANAGER_NAME, management.ChannelManager())
+        self.builders = self.assemble_builders()
+        self.build_channel_accessors()
+
+    @meth
+    def base_a(self):
+        return self.build('base_a')
+
+    @meth
+    def base_b(self):
+        return self.build('base_b')
+
+    @meth
+    def child_a(self):
+        return self.build('child_a', self.base_a())
+
+    @meth
+    def child_b(self):
+        return self.build('child_b', self.base_b())
+
+    @meth
+    def final(self):
+        return self.build('final', self.child_a(), self.child_b())
 
 
