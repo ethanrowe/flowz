@@ -1,3 +1,9 @@
+# Version 0.6.0
+
+* Adds the `channelmethod` decorator as a callable-oriented version of `channelproperty` (Issue #41)
+* Includes ipython notebook user guide (thanks to Patrick Rusk!)
+* Suppresses the "future exception not handled" warnings from tornado for channels. (Issue #30)
+
 # Version 0.5.0
 
 * Adds the new `flowz.channels.tools` module for utility functions/helpers
