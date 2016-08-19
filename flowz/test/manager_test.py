@@ -88,18 +88,47 @@ def test_channel_manager_channels():
     tools.assert_equal(chan_b.tee.call1, mgr[key_b])
 
 
-class TestChannelProperty(object):
-    BUILDERS = ('base_a', 'base_b', 'child_a', 'child_b', 'final')
+class ChannelBuildHelperCases(object):
+    """
+    Test cases for use of channel property/method decorator helpers
+
+    Doesn't test anything by itself; in order to use these tests,
+    extend this class and implement:
+    - build_channel_accessors, such that it defines "get_CHANNEL" methods
+      per name in HELPER_NAMES that when called returns the corresponding
+      channel, accessing it through the helper-provided interface (which
+      will either be a method of a property)
+    - the channel builders themselves for each channel named in HELPER_NAMES,
+      using property-based helper or method-oriented helper according to
+      your purpose.
+
+    The tests will use these get_foo() methods to access the channel in the
+    appropriate manner.
+    """
+
+    HELPER_NAMES = ('base_a', 'base_b', 'child_a', 'child_b', 'final')
+
+    def build_channel_accessors(self):
+        def failer(onname):
+            def fail():
+                raise NotImplementedError('No accessors for %s', onname)
+            return fail
+
+        for name in self.HELPER_NAMES:
+            setattr(self, 'get_%s' % name, failer(name))
+
     
     def setup(self):
         self.channel_manager = management.ChannelManager()
         self.builders = self.assemble_builders()
+        self.build_channel_accessors()
+
 
     def assemble_builders(self):
         return dict(
                 (name, mock.Mock(name='Builder<%s>' % name,
                     return_value=mock_channel('Channel<%s>' %name)))
-                for name in self.BUILDERS)
+                for name in self.HELPER_NAMES)
 
     def build(self, name, *args):
         return self.builders[name](*args)
@@ -107,58 +136,38 @@ class TestChannelProperty(object):
     def chan(self, name):
         return self.builders[name].return_value
 
-    @management.channelproperty
-    def base_a(self):
-        return self.build('base_a')
-
-    @management.channelproperty
-    def base_b(self):
-        return self.build('base_b')
-
-    @management.channelproperty
-    def child_a(self):
-        return self.build('child_a', self.base_a)
-
-    @management.channelproperty
-    def child_b(self):
-        return self.build('child_b', self.base_b)
-
-    @management.channelproperty
-    def final(self):
-        return self.build('final', self.child_a, self.child_b)
-
     def verify_channel(self, name, callno):
         expect = self.builders[name].return_value
         if callno > 0:
             expect = getattr(expect.tee, 'call%d' % (callno-1))
     
-    def test_basic_properties(self):
+    def test_basic_channels(self):
         # First access to base_a
-        tools.assert_equal(self.chan('base_a'), self.base_a)
+        tools.assert_equal(self.chan('base_a'), self.get_base_a())
         # Second access to base_a should be a tee
-        tools.assert_equal(self.chan('base_a').tee.call0, self.base_a)
+        tools.assert_equal(self.chan('base_a').tee.call0, self.get_base_a())
         # First access to base_b
-        tools.assert_equal(self.chan('base_b'), self.base_b)
+        tools.assert_equal(self.chan('base_b'), self.get_base_b())
         # Second access to base b should be a tee
-        tools.assert_equal(self.chan('base_b').tee.call0, self.base_b)
+        tools.assert_equal(self.chan('base_b').tee.call0, self.get_base_b())
         # Each builder should be called only once.
         self.builders['base_a'].assert_called_once_with()
         self.builders['base_b'].assert_called_once_with()
 
 
-    def test_composed_properties(self):
+    def test_composed_channels(self):
         # First access to each of child_a, child_b
-        tools.assert_equal(self.chan('child_a'), self.child_a)
-        tools.assert_equal(self.chan('child_b'), self.child_b)
+        tools.assert_equal(self.chan('child_a'), self.get_child_a())
+        tools.assert_equal(self.chan('child_b'), self.get_child_b())
 
         # First access to each of base_a, base_b in getting child.
         self.builders['child_a'].assert_called_once_with(self.chan('base_a'))
         self.builders['child_b'].assert_called_once_with(self.chan('base_b'))
 
         # First access to final
-        tools.assert_equal(self.chan('final'), self.final)
+        tools.assert_equal(self.chan('final'), self.get_final())
         # Second access to final
-        tools.assert_equal(self.chan('final').tee.call0, self.final)
+        tools.assert_equal(self.chan('final').tee.call0, self.get_final())
 
         # Second access to each of child_a, child_b in building final
         self.builders['final'].assert_called_once_with(
@@ -166,13 +175,50 @@ class TestChannelProperty(object):
                 self.chan('child_b').tee.call0)
 
 
+class TestChannelProperty(ChannelBuildHelperCases):
+    """
+    ChannelBuildHelperCases test using channelproperty to build channels.
+
+    The get_foo() accessors simply retrieve the corresponding property.
+    """
+    def build_channel_accessors(self):
+        def accessor(onname):
+            return lambda: getattr(self, onname)
+        for name in self.HELPER_NAMES:
+            setattr(self, 'get_%s' % name, accessor(name))
+
+    @management.channelproperty
+    def base_a(self):
+        return self.build('base_a')
+
+    @management.channelproperty
+    def base_b(self):
+        return self.build('base_b')
+
+    @management.channelproperty
+    def child_a(self):
+        return self.build('child_a', self.base_a)
+
+    @management.channelproperty
+    def child_b(self):
+        return self.build('child_b', self.base_b)
+
+    @management.channelproperty
+    def final(self):
+        return self.build('final', self.child_a, self.child_b)
+
+
+
+
 MANAGER_NAME = str(mock.Mock(name='AChannelManager'))
 prop = management.channelproperty(MANAGER_NAME)
+meth = management.channelmethod(MANAGER_NAME)
 
 class TestChannelPropertyAlternateName(TestChannelProperty):
     def setup(self):
         setattr(self, MANAGER_NAME, management.ChannelManager())
         self.builders = self.assemble_builders()
+        self.build_channel_accessors()
 
     @prop
     def base_a(self):
@@ -193,5 +239,63 @@ class TestChannelPropertyAlternateName(TestChannelProperty):
     @prop
     def final(self):
         return self.build('final', self.child_a, self.child_b)
+
+
+class TestChannelMethod(ChannelBuildHelperCases):
+    """
+    ChannelBuildHelperCases test using channelmethod to build channels.
+
+    The get_foo() accessors are just lambdas on top of the underlying methods.
+    """
+    def build_channel_accessors(self):
+        for name in self.HELPER_NAMES:
+            setattr(self, 'get_%s' % name, getattr(self, name))
+
+    @management.channelmethod
+    def base_a(self):
+        return self.build('base_a')
+
+    @management.channelmethod
+    def base_b(self):
+        return self.build('base_b')
+
+    @management.channelmethod
+    def child_a(self):
+        return self.build('child_a', self.base_a())
+
+    @management.channelmethod
+    def child_b(self):
+        return self.build('child_b', self.base_b())
+
+    @management.channelmethod
+    def final(self):
+        return self.build('final', self.child_a(), self.child_b())
+
+
+class TestChannelMethodAlternateName(TestChannelMethod):
+    def setup(self):
+        setattr(self, MANAGER_NAME, management.ChannelManager())
+        self.builders = self.assemble_builders()
+        self.build_channel_accessors()
+
+    @meth
+    def base_a(self):
+        return self.build('base_a')
+
+    @meth
+    def base_b(self):
+        return self.build('base_b')
+
+    @meth
+    def child_a(self):
+        return self.build('child_a', self.base_a())
+
+    @meth
+    def child_b(self):
+        return self.build('child_b', self.base_b())
+
+    @meth
+    def final(self):
+        return self.build('final', self.child_a(), self.child_b())
 
 
