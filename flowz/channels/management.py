@@ -1,4 +1,5 @@
 import functools
+import inspect
 
 class AbstractChannelAccessor(object):
     """
@@ -157,6 +158,7 @@ def _channelmethod(manager_name, fn):
         except KeyError:
             manager.add_builder(name, lambda: fn(self))
             return manager[name]
+    wrapped.is_channelmethod = True
     return wrapped
 
 def _channelproperty(manager_name, fn):
@@ -350,3 +352,30 @@ def channelmethod(fn_or_name):
         return _channelmethod('channel_manager', fn_or_name)
     return lambda fn: _channelmethod(fn_or_name, fn)
 
+
+def get_channelmethods(obj):
+    """
+    Returns a sorted list of the names of all channelmethods defined for an object.
+    """
+    channelmethods = list()
+    # getmembers() returns a list of tuples already sorted by name
+    for name, method in inspect.getmembers(obj, inspect.ismethod):
+        # To be a channelmethod, the method must have an attribute called `is_channelmethod`,
+        # *and* it must be bound to the object, since it is common for channelmethods from one
+        # channel manager to be passed into the constructor of a subsequent channel manager!
+        if hasattr(method, 'is_channelmethod') and (method.__self__ == obj):
+            channelmethods.append(name)
+    return tuple(channelmethods)
+
+
+def get_channelproperties(obj):
+    """
+    Returns a sorted list of the names of all channelproperties defined for an object.
+    """
+    channelproperties = list()
+    # getmembers() returns a list of tuples already sorted by name
+    for name, property in inspect.getmembers(obj.__class__, inspect.isdatadescriptor):
+        if hasattr(property, 'fget'):
+            if hasattr(property.fget, 'is_channelmethod'):
+                channelproperties.append(name)
+    return tuple(channelproperties)

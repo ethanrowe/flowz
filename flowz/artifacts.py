@@ -140,7 +140,7 @@ class DerivedArtifact(AbstractArtifact):
 
     @gen.coroutine
     def __start_get__(self):
-        self.logger.info("%s waiting on sources." % str(self))
+        self.logger.debug("%s waiting on sources." % str(self))
         sources = yield [maybe_artifact(source) for source in self.sources]
         self.logger.info("%s running deriver." % str(self))
         yield gen.moment
@@ -183,7 +183,7 @@ class ThreadedDerivedArtifact(DerivedArtifact):
 
     @gen.coroutine
     def __start_get__(self):
-        self.logger.info("%s waiting on sources." % str(self))
+        self.logger.debug("%s waiting on sources." % str(self))
         sources = yield [maybe_artifact(source) for source in self.sources]
         result = yield self.__derive__(*sources)
         self.__exists__ = True
