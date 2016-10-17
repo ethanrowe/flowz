@@ -299,3 +299,44 @@ class TestChannelMethodAlternateName(TestChannelMethod):
         return self.build('final', self.child_a(), self.child_b())
 
 
+class IgnoreMe(object):
+    @management.channelmethod
+    def method_to_ignore(self):
+        pass
+
+
+class OneOfBoth(object):
+    def __init__(self):
+        super(OneOfBoth, self).__init__()
+        # This tests to make sure that have an attribute that is a channelmethod passed
+        # from *another* object is not seen as a channelmethod for this object
+        self.should_ignore = IgnoreMe().method_to_ignore
+
+    @management.channelproperty
+    def prop(self):
+        pass
+
+    @management.channelmethod
+    def method(self):
+        pass
+
+
+def test_get_channelmethods():
+    # This test not integrated into classes above because of monkey business creating get_* methods
+    expected = ChannelBuildHelperCases.HELPER_NAMES
+    tools.assert_equals(management.get_channelmethods(TestChannelMethod()), expected)
+    tools.assert_equals(management.get_channelmethods(TestChannelMethodAlternateName()), expected)
+    tools.assert_equals(management.get_channelmethods(TestChannelProperty()), tuple())
+    tools.assert_equals(management.get_channelmethods(TestChannelPropertyAlternateName()), tuple())
+
+    tools.assert_equals(management.get_channelmethods(OneOfBoth()), ('method',))
+
+
+def test_get_channelproperties():
+    expected = ChannelBuildHelperCases.HELPER_NAMES
+    tools.assert_equals(management.get_channelproperties(TestChannelMethod()), tuple())
+    tools.assert_equals(management.get_channelproperties(TestChannelMethodAlternateName()), tuple())
+    tools.assert_equals(management.get_channelproperties(TestChannelProperty()), expected)
+    tools.assert_equals(management.get_channelproperties(TestChannelPropertyAlternateName()), expected)
+
+    tools.assert_equals(management.get_channelproperties(OneOfBoth()), ('prop',))
