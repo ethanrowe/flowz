@@ -14,7 +14,7 @@ class AbstractArtifact(object):
     An object that wraps the details for asynchronous access to an artifact.
     """
 
-    logger = logging.getLogger('Artifact')
+    logger = logging.getLogger(__name__)
     name = None
 
     __exists__ = False
@@ -117,7 +117,7 @@ class ExtantArtifact(AbstractArtifact):
         except:
             self.logger.exception("%s getter failure." % str(self))
             raise
-        self.logger.info("%s retrieved." % str(self))
+        self.logger.debug("%s retrieved." % str(self))
         raise gen.Return(result)
 
 
@@ -142,7 +142,7 @@ class DerivedArtifact(AbstractArtifact):
     def __start_get__(self):
         self.logger.debug("%s waiting on sources." % str(self))
         sources = yield [maybe_artifact(source) for source in self.sources]
-        self.logger.info("%s running deriver." % str(self))
+        self.logger.debug("%s running deriver." % str(self))
         yield gen.moment
         try:
             result = self.deriver(*sources)
@@ -150,7 +150,7 @@ class DerivedArtifact(AbstractArtifact):
             self.logger.exception("%s deriver failure." % str(self))
             raise
         self.__exists__ = True
-        self.logger.info("%s ready." % str(self))
+        self.logger.debug("%s ready." % str(self))
         self.sources = None
         self.deriver = None
         raise gen.Return(result)
@@ -169,12 +169,12 @@ class ThreadedDerivedArtifact(DerivedArtifact):
         @param sources: zero or more sources that can be synchronous or asychronous
         """
         super(ThreadedDerivedArtifact, self).__init__(deriver, *sources, **kw)
-        self.logger.info("%s created (%s)." % (str(self), self.name))
+        self.logger.debug("%s created (%s)." % (str(self), self.name))
         self.executor = executor
 
     @concurrent.run_on_executor
     def __derive__(self, *sources):
-        self.logger.info("%s running deriver on executor." % str(self))
+        self.logger.debug("%s running deriver on executor." % str(self))
         try:
             return self.deriver(*sources)
         except:
@@ -187,7 +187,7 @@ class ThreadedDerivedArtifact(DerivedArtifact):
         sources = yield [maybe_artifact(source) for source in self.sources]
         result = yield self.__derive__(*sources)
         self.__exists__ = True
-        self.logger.info("%s ready." % str(self))
+        self.logger.debug("%s ready." % str(self))
         self.sources = None
         self.deriver = None
         raise gen.Return(result)
