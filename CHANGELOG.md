@@ -1,3 +1,12 @@
+# Version 0.7.0
+
+* Adds introspection tools for channel management objects:
+    * `get_channelmethods`
+    * `get_channelproperties`
+* Changes logger names for artifacts and downgrades some messages from INFO level to DEBUG
+    * This change in logger names could break deployed logging configurations, and for this
+      reason, we incremented the minor version; otherwise this would be a micro bump.
+
 # Version 0.6.0
 
 * Adds the `channelmethod` decorator as a callable-oriented version of `channelproperty` (Issue #41)
