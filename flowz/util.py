@@ -175,10 +175,25 @@ def incremental_assembly(source, dest, assembler):
     return out.map(LastResult(lambda (k, (v, fn)), last: fn(v, last)))
 
 
-def channel_inner_join(a, b):
+def channel_inner_join(*chans):
     """
-    Cogroup two channels and filter the result to only pass through those entries that
+    Cogroup multiple channels and filter the result to only pass through those entries that
     have equivalent keys, as in a relational inner join.
     """
-    out = a.cogroup(b)
-    return out.filter(lambda (x, y): (x is not None and y is not None and x[0] == y[0]))
+    def all_match(arts):
+        first_key = None
+        try:
+            for art in arts:
+                if art[0] != first_key:
+                    if first_key is None:
+                        # Remember the first key encountered
+                        first_key = art[0]
+                    else:
+                        return False
+            # If all the keys were None, that's a degenerate condition that should return False
+            return first_key is not None
+        except TypeError:
+            # This indicates that one or more of the artifacts was None
+            return False
+
+    return chans[0].cogroup(*chans[1:]).filter(all_match)
