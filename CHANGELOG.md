@@ -1,3 +1,7 @@
+# Version 1.0.0
+
+* `flowz.util.channel_inner_join` takes any number of channels.
+
 # Version 0.7.0
 
 * Adds introspection tools for channel management objects:

@@ -30,9 +30,16 @@ class AssemblyTest(tt.AsyncTestCase):
     @tt.gen_test
     def test_channel_inner_join(self):
         chan1, chan2 = self.get_two_chans()
-        chan3 = channel_inner_join(chan1, chan2)
-        values = yield drain(chan3)
+        joined = channel_inner_join(chan1, chan2)
+        values = yield drain(joined)
         tools.assert_equal(values, [((2, 2), (2, 1)), ((4, 4), (4, 2))])
+        chan1, chan2 = self.get_two_chans()
+        chan3, chan4 = self.get_two_chans()
+        chan5, chan6 = self.get_two_chans()
+        joined = channel_inner_join(chan1, chan2, chan3, chan4, chan5, chan6)
+        values = yield drain(joined)
+        tools.assert_equal(values, [((2, 2), (2, 1), (2, 2), (2, 1), (2, 2), (2, 1)),
+                                    ((4, 4), (4, 2), (4, 4), (4, 2), (4, 4), (4, 2))])
 
     @tt.gen_test
     def test_incremental_assembly(self):
