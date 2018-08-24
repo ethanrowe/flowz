@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name = 'flowz',
-    version = '1.0.0.20180824',
+    version = '1.0.0.20180825',
     description = 'Async I/O - oriented dependency programming framework',
     url = 'https://github.com/ethanrowe/flowz',
     author = 'Ethan Rowe',
@@ -24,6 +24,6 @@ setup(
         ],
     install_requires = [
         'six >= 1.9.0',
-        'tornado >= 4.2, < 5',
+        'tornado >= 4.2',
         'futures >= 3.0.5;python_version<"3"'
         ])
