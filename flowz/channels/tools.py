@@ -34,7 +34,7 @@ def rolling(window_size):
     return Roller(window_size)
 
 
-def pinned_group_size(lower=0, upper=sys.maxint):
+def pinned_group_size(lower=0, upper=sys.maxsize):
     """
     Returns a function that will test its argument -- expected to be a (k,g) tuple
     with a key and a collection -- and return True iff the length of the collection
@@ -42,7 +42,7 @@ def pinned_group_size(lower=0, upper=sys.maxint):
 
     This is intended to used like `chan.filter(pin_group_size(2, 5))`.
     """
-    return lambda (k, g): lower <= len(g) <= upper
+    return lambda key_group: lower <= len(key_group[1]) <= upper
 
 
 def exact_group_size(size):

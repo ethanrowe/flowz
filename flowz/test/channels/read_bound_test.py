@@ -21,7 +21,7 @@ class ReadBoundChannelsTest(tt.AsyncTestCase):
         chan = channels.IterChannel(vals)
         chan = channels.MapChannel(chan, lambda i: (i, reads[-1]))
 
-        received = yield drain(chan, lambda (c, l): reads.append(c))
+        received = yield drain(chan, lambda c_l: reads.append(c_l[0]))
 
         tools.assert_equal(expect, received)
 
@@ -39,7 +39,7 @@ class ReadBoundChannelsTest(tt.AsyncTestCase):
         chan = channels.FlatMapChannel(chan,
                 lambda row: ((pair, reads[-1]) for pair in row))
 
-        received = yield drain(chan, lambda (c, l): reads.append(c))
+        received = yield drain(chan, lambda c_l: reads.append(c_l[0]))
 
         tools.assert_equal(expect, received)
 

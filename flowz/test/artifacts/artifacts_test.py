@@ -1,6 +1,8 @@
 from collections import OrderedDict
 from concurrent import futures
 
+
+import six
 from nose import tools
 from tornado import gen
 from tornado import testing as tt
@@ -17,8 +19,11 @@ class ArtifactsTest(tt.AsyncTestCase):
     NAME = "Fooble"
     NUM_ARR = [1, 2, 3, 4, 5]
     NUM_DICT = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
-    NUM_ORDERED_DICT = OrderedDict([(i, NUM_DICT[i]) for i in NUM_ARR])
-    NUM_REVERSED_DICT = OrderedDict([(i, NUM_DICT[i]) for i in reversed(NUM_ARR)])
+
+    @classmethod
+    def setUpClass(cls):
+        cls.NUM_ORDERED_DICT = OrderedDict([(i, cls.NUM_DICT[i]) for i in cls.NUM_ARR])
+        cls.NUM_REVERSED_DICT = OrderedDict([(i, cls.NUM_DICT[i]) for i in reversed(cls.NUM_ARR)])
 
     # Possible getter/deriver/transform functions
 
@@ -41,7 +46,7 @@ class ArtifactsTest(tt.AsyncTestCase):
 
     @staticmethod
     def derive_key(dict_, value):
-        for (k, v) in dict_.iteritems():
+        for (k, v) in six.iteritems(dict_):
             if v == value:
                 return k
         return None

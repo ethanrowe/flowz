@@ -10,7 +10,7 @@ def min_lt(f):
     @functools.wraps(f)
     def t():
         v = f()
-        print v
+        print(v)
         tools.assert_true(util.MINIMUM < v)
         tools.assert_true(util.MINIMUM <= v)
         tools.assert_true(util.MINIMUM != v)
@@ -24,7 +24,7 @@ def min_eq(f):
     @functools.wraps(f)
     def t():
         v = f()
-        print v
+        print(v)
         tools.assert_true(util.MINIMUM == v)
         tools.assert_true(util.MINIMUM <= v)
         tools.assert_true(util.MINIMUM >= v)
@@ -38,7 +38,7 @@ def max_gt(f):
     @functools.wraps(f)
     def t():
         v = f()
-        print v
+        print(v)
         tools.assert_true(util.MAXIMUM > v)
         tools.assert_true(util.MAXIMUM >= v)
         tools.assert_true(util.MAXIMUM != v)
@@ -52,7 +52,7 @@ def max_eq(f):
     @functools.wraps(f)
     def t():
         v = f()
-        print v
+        print(v)
         tools.assert_true(util.MAXIMUM == v)
         tools.assert_true(util.MAXIMUM >= v)
         tools.assert_true(util.MAXIMUM <= v)

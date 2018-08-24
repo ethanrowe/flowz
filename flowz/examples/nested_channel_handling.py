@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from tornado import gen
 
 from flowz.app import Flo

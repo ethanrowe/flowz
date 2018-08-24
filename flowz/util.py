@@ -8,19 +8,19 @@ class Minimum(object):
     """
     def __gt__(self, other):
         return False
-    
+
     def __lt__(self, other):
         return self is not other
 
     def __eq__(self, other):
         return self is other
-    
+
     def __ne__(self, other):
         return self is not other
-    
+
     def __ge__(self, other):
         return self is other
-    
+
     def __le__(self, other):
         return True
 
@@ -34,16 +34,16 @@ class Maximum(object):
 
     def __lt__(self, other):
         return False
-    
+
     def __eq__(self, other):
         return self is other
-    
+
     def __ne__(self, other):
         return self is not other
-    
+
     def __ge__(self, other):
         return True
-    
+
     def __le__(self, other):
         return self is other
 
@@ -93,7 +93,7 @@ class LastResult(object):
         first = self.determine_first_call(func, first)
         self.next_call = self.build_first_call(first)
         self.trailing_call = self.build_trailing_call(func)
-    
+
     @classmethod
     def determine_first_call(cls, func, firstfunc):
         if firstfunc is None:
@@ -172,7 +172,12 @@ def incremental_assembly(source, dest, assembler):
     # Normal merge.
     out = merge_keyed_channels(source, dest)
 
-    return out.map(LastResult(lambda (k, (v, fn)), last: fn(v, last)))
+    def assemble(k__v_fn, last):
+        # Emulates this Python 2:  lambda (k, (v, fn)), last: fn(v, last)))
+        (k, (v, fn)) = k__v_fn
+        return fn(v, last)
+
+    return out.map(LastResult(assemble))
 
 
 def channel_inner_join(*chans):
