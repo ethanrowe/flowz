@@ -90,7 +90,7 @@ class Flo(object):
         self.loop.spawn_callback(self.main)
         self.loop.start()
         if self.exc_info:
-            six.reraise(self.exc_info[1], None, self.exc_info[2])
+            six.reraise(*self.exc_info)
 
 
     @gen.coroutine
