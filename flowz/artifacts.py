@@ -218,7 +218,10 @@ class WrappedArtifact(AbstractArtifact):
         return self.value.ensure()
 
     def __getattr__(self, attr):
-        if hasattr(self, 'value'):
+        # NOTE: The text below used to be...
+        # if hasattr(self, 'value'):
+        # ...but that breaks under Python 3, which seems to immediately call __getattr__ again.
+        if 'value' in self.__dict__:
             return getattr(self.value, attr)
         else:
             raise AttributeError("No such attribute: %r; value not yet initialized" % attr)

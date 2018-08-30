@@ -9,6 +9,7 @@ from tornado import ioloop as iol
 from tornado import locks
 
 from flowz import util
+from flowz import compat
 
 
 class ChannelDone(Exception):
@@ -102,7 +103,7 @@ class Channel(object):
         # starter is the guy to call to get it going
         self.starter = starter
 
-   
+
     def done(self):
         """
         Returns `True` if all messages have been consumed.
@@ -377,7 +378,7 @@ class ReadChannel(Channel):
         super(ReadChannel, self).__init__(self.__reader__)
         self.__channel__ = channel
 
-    
+
     @gen.coroutine
     def __reader__(self, thischan):
         """
@@ -400,10 +401,7 @@ class ReadChannel(Channel):
         except ChannelDone:
             set_channel_done_exception(head, "ReadChannel.__reader__")
         except:
-            # Capture exception information, including traceback
-            # TODO Possible issue when Python3-compatibility is important
-            head.set_exc_info(sys.exc_info())
-
+            compat.future_set_exc_info(head, sys.exc_info())
 
     @gen.coroutine
     def __next_item__(self):
@@ -504,9 +502,7 @@ class FlatMapChannel(MapChannel):
         except ChannelDone:
             set_channel_done_exception(head, "FlatMapChannel.__reader__")
         except:
-            # Capture exception information, including traceback
-            # TODO Possible issue when Python3-compatibility is important
-            head.set_exc_info(sys.exc_info())
+            compat.future_set_exc_info(head, sys.exc_info())
 
 
 class Windower(object):
@@ -568,7 +564,7 @@ class Windower(object):
         while active:
             k = active.pop(0)
             yield k, mem.pop(k)
-            
+
 
 class WindowChannel(FlatMapChannel):
     """
@@ -1023,7 +1019,7 @@ class ChainChannel(ReadChannel):
                 chn.pop(0)
         raise ChannelDone("Channel is done (ChainChannel.__next_item__)")
 
-        
+
 
 
 class CoGroupChannel(ReadChannel):
@@ -1038,7 +1034,7 @@ class CoGroupChannel(ReadChannel):
 
 
     Suppose that we have two channels:
-    
+
     ```
         S             D
      ------         ----
@@ -1046,11 +1042,11 @@ class CoGroupChannel(ReadChannel):
     (K1, S1)      (K1, D1)
     (K3, S3)      (K2, D2)
     (K4, S4)
-    
+
     ```
-    
+
     In the cogrouped world, we would get this as:
-    
+
     ```
     ((K0, S0), (K0, D0))
     ((K1, S1), (K1, D1))
@@ -1058,7 +1054,7 @@ class CoGroupChannel(ReadChannel):
     ((K3, S3), (K2, D2))
     ((K4, S4), (K2, D2))
     ```
-    
+
     In other words, we walk the ordered set of all keys _SKeys_ + _DKeys_,
     and for each such key, we should the most recent `(key, value)` pair per input
     channel less than or equal to the current key.
@@ -1091,7 +1087,7 @@ class CoGroupChannel(ReadChannel):
 
     _last_key = util.MINIMUM
     _max_key = util.MAXIMUM
-    
+
     def __init__(self, channels):
         super(ReadChannel, self).__init__(self.__reader__)
         self.channels = channels
@@ -1103,18 +1099,18 @@ class CoGroupChannel(ReadChannel):
         self._futures = [chan.next() for chan in self.channels]
         r = yield super(CoGroupChannel, self).__reader__(self)
         raise gen.Return(r)
-    
+
     @gen.coroutine
     def __next_item__(self):
         pairs = []
         next_reads = []
-        
+
         # Note that to ensure MAXIMUM and MINIMUM control comparisons with
         # new keys, comparisons should always use last_key/next_key as the
         # first operator of the comparison operator.
         last_key = self._last_key
         next_key = self._max_key
-        
+
         # Get the next states of the futures.
         for i, future in enumerate(list(self._futures)):
             try:
@@ -1137,7 +1133,7 @@ class CoGroupChannel(ReadChannel):
         if not next_reads:
             # No qualified keys remaining.  We're done.
             raise ChannelDone("Channel is done (CoGroupChannel.__next_item__)")
-        
+
         # Propagates the guys with the lowest qualifying key to the state
         # list, and asynchronously fetch their respective channel's next vals.
         for i, pair in next_reads:

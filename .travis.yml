@@ -1,4 +1,18 @@
 language: python
-python:
-  - "2.7"
-script: python setup.py nosetests
+
+# Test with each combination of python 2.7 and 3.7, and tornado 4.5.3 and 5.1
+matrix:
+  include:
+    - python: 2.7
+      env: TORNADO_VER=4.5.3
+    - python: 2.7
+      env: TORNADO_VER=5.1
+    - python: 3.7-dev
+      env: TORNADO_VER=4.5.3
+    - python: 3.7-dev
+      env: TORNADO_VER=5.1
+
+script:
+- pip install tornado==$TORNADO_VER
+- pip install -e .
+- python setup.py nosetests

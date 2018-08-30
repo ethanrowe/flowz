@@ -22,10 +22,17 @@ odd_triples = triples.tee().flat_map(
 together = doubles.cogroup(triples, even_triples, odd_triples)
 
 # And convert each to a dictionary
-dicts = together.map(lambda (dbls, trpls, eventrp, oddtrp): {
-    'key': dbls[0], 'double': dbls[1], 'triple': trpls[1],
-    'last_even_triple': None if eventrp is None else eventrp[1],
-    'last_odd_triple': None if oddtrp is None else oddtrp[1]})
+def convert_to_dict(chans):
+    (dbls, trpls, eventrp, oddtrp) = chans
+    return {
+        'key': dbls[0],
+        'double': dbls[1],
+        'triple': trpls[1],
+        'last_even_triple': None if eventrp is None else eventrp[1],
+        'last_odd_triple': None if oddtrp is None else oddtrp[1]
+    }
+
+dicts = together.map(convert_to_dict)
 
 # print it and run.
 app.Flo([dicts.map(print)]).run()

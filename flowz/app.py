@@ -1,6 +1,7 @@
 import itertools
 import sys
 
+import six
 from tornado import gen
 from tornado import ioloop
 
@@ -10,7 +11,7 @@ class Flo(object):
     """
     Class for managing data processing workflows.
 
-    A `Flo` is given some number of target 
+    A `Flo` is given some number of target
     :class:`flowz.channels.Channel` objects.
 
     The `Flo` can then be `run()`, and it will run a `tornado.ioloop.IOLoop`
@@ -57,8 +58,8 @@ class Flo(object):
         """
         Forces app to stop on unhandled exceptions.
         """
+        result = None
         try:
-            result = None
             if hasattr(target, 'future'):
                 result = yield target.future()
             else:
@@ -89,12 +90,11 @@ class Flo(object):
         self.loop.spawn_callback(self.main)
         self.loop.start()
         if self.exc_info:
-            raise self.exc_info[1], None, self.exc_info[2]
+            six.reraise(*self.exc_info)
 
 
     @gen.coroutine
     def main(self):
-        targets = self.targets
         wrap = self.wrap_target
         while self.targets and getattr(self, 'exc_info') is None:
             yield gen.moment
