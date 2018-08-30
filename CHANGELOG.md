@@ -1,3 +1,7 @@
+# Version 1.1.0
+
+* Python 3 compatibility fixes
+
 # Version 1.0.0
 
 * `flowz.util.channel_inner_join` takes any number of channels.
