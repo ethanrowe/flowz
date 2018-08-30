@@ -9,6 +9,7 @@ from tornado import ioloop as iol
 from tornado import locks
 
 from flowz import util
+from flowz import compat
 
 
 class ChannelDone(Exception):
@@ -400,14 +401,7 @@ class ReadChannel(Channel):
         except ChannelDone:
             set_channel_done_exception(head, "ReadChannel.__reader__")
         except:
-            # Capture exception information, including traceback
-            exc_info = sys.exc_info()
-            try:
-                # tornado >= 5
-                cc.future_set_exc_info(head, exc_info)
-            except AttributeError:
-                # tornado < 5
-                head.set_exc_info(exc_info)
+            compat.future_set_exc_info(head, sys.exc_info())
 
     @gen.coroutine
     def __next_item__(self):
@@ -508,14 +502,7 @@ class FlatMapChannel(MapChannel):
         except ChannelDone:
             set_channel_done_exception(head, "FlatMapChannel.__reader__")
         except:
-            # Capture exception information, including traceback
-            exc_info = sys.exc_info()
-            try:
-                # tornado >= 5
-                cc.future_set_exc_info(head, exc_info)
-            except AttributeError:
-                # tornado < 5
-                head.set_exc_info(exc_info)
+            compat.future_set_exc_info(head, sys.exc_info())
 
 
 class Windower(object):
